@@ -15,11 +15,6 @@ export function middleware(request: NextRequest) {
 
   // Laisser passer les routes publiques
   if (PUBLIC_PATHS.some((path) => pathname.startsWith(path))) {
-    // Si déjà connecté et sur /login, rediriger vers dashboard
-    const token = request.cookies.get('token')?.value;
-    if (token && pathname === '/login') {
-      return NextResponse.redirect(new URL('/dashboard', request.url));
-    }
     return NextResponse.next();
   }
 
@@ -43,7 +38,6 @@ export function middleware(request: NextRequest) {
     // Routes restreintes par rôle
     const ROLE_RESTRICTIONS: Record<string, string[]> = {
       '/night-audit/history': ['admin', 'auditor', 'manager'],
-      '/analytics': ['admin', 'manager'],
     };
 
     for (const [restrictedPath, allowedRoles] of Object.entries(ROLE_RESTRICTIONS)) {

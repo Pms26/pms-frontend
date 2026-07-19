@@ -6,8 +6,22 @@
 // ═══════════════════════════════════════════════════════════
 
 import { useQuery } from '@tanstack/react-query';
-import { getYTDComparison, getSegmentAnalytics } from '@/lib/api/analytics';
+import { getYTDComparison, getSegmentAnalytics, getMonthlyData } from '@/lib/api/analytics';
 import Card from '@/components/ui/Card';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  LineElement,
+  PointElement,
+  Tooltip,
+  Legend,
+  Filler,
+} from 'chart.js';
+import { Bar, Line } from 'react-chartjs-2';
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Tooltip, Legend, Filler);
 
 export default function AnalyticsPage() {
   const { data: ytdCards } = useQuery({
@@ -19,6 +33,83 @@ export default function AnalyticsPage() {
     queryKey: ['segment-analytics'],
     queryFn: getSegmentAnalytics,
   });
+
+  const { data: monthly } = useQuery({
+    queryKey: ['monthly-data'],
+    queryFn: getMonthlyData,
+  });
+
+  const segmentBarData = segments
+    ? {
+        labels: segments.map((s) => s.segment),
+        datasets: [
+          {
+            label: 'CA 2026',
+            data: segments.map((s) => parseInt(s.ca2026.replace(/\s/g, '').replace('DH', '')) || 0),
+            backgroundColor: 'rgba(99, 102, 241, 0.8)',
+            borderRadius: 6,
+          },
+          {
+            label: 'CA 2025',
+            data: segments.map((s) => parseInt(s.ca2025.replace(/\s/g, '').replace('DH', '')) || 0),
+            backgroundColor: 'rgba(148, 163, 184, 0.4)',
+            borderRadius: 6,
+          },
+        ],
+      }
+    : null;
+
+  const segmentBarOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { position: 'top' as const, labels: { usePointStyle: true, boxWidth: 8 } } },
+    scales: {
+      x: { grid: { display: false } },
+      y: { grid: { color: 'rgba(226,232,240,0.5)' }, ticks: { callback: (v: string | number) => `${(Number(v) / 1000).toFixed(0)}K` } },
+    },
+  };
+
+  const monthlyLineData = monthly
+    ? {
+        labels: monthly.labels,
+        datasets: [
+          {
+            label: 'Direct',
+            data: monthly.segments.direct,
+            borderColor: '#6366f1',
+            backgroundColor: 'rgba(99, 102, 241, 0.1)',
+            fill: true,
+            tension: 0.4,
+          },
+          {
+            label: 'OTA',
+            data: monthly.segments.ota,
+            borderColor: '#10b981',
+            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+            fill: true,
+            tension: 0.4,
+          },
+          {
+            label: 'B2B',
+            data: monthly.segments.b2b,
+            borderColor: '#f59e0b',
+            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+            fill: true,
+            tension: 0.4,
+          },
+        ],
+      }
+    : null;
+
+  const monthlyLineOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: { legend: { position: 'top' as const, labels: { usePointStyle: true, boxWidth: 8 } } },
+    scales: {
+      x: { grid: { display: false } },
+      y: { grid: { color: 'rgba(226,232,240,0.5)' }, ticks: { callback: (v: string | number) => `${Number(v)}%` } },
+    },
+  };
 
   return (
     <div className="animate-fade-in">
@@ -53,24 +144,26 @@ export default function AnalyticsPage() {
         ))}
       </div>
 
-      {/* Chart Placeholders */}
+      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-6">
         <Card>
           <h6 className="text-sm font-semibold text-slate-700 mb-3">CA par Segment de Marché (DH)</h6>
-          <div className="h-[220px] flex items-center justify-center text-slate-400 text-sm">
-            <div className="text-center">
-              <i className="bi bi-bar-chart text-4xl block mb-2 opacity-30" />
-              Chart.js sera intégré ici
-            </div>
+          <div className="h-[260px]">
+            {segmentBarData ? (
+              <Bar data={segmentBarData} options={segmentBarOptions} />
+            ) : (
+              <div className="h-full flex items-center justify-center text-slate-400 text-sm">Chargement...</div>
+            )}
           </div>
         </Card>
         <Card>
           <h6 className="text-sm font-semibold text-slate-700 mb-3">Évolution Mensuelle — T.O. par Canal</h6>
-          <div className="h-[220px] flex items-center justify-center text-slate-400 text-sm">
-            <div className="text-center">
-              <i className="bi bi-graph-up text-4xl block mb-2 opacity-30" />
-              Chart.js sera intégré ici
-            </div>
+          <div className="h-[260px]">
+            {monthlyLineData ? (
+              <Line data={monthlyLineData} options={monthlyLineOptions} />
+            ) : (
+              <div className="h-full flex items-center justify-center text-slate-400 text-sm">Chargement...</div>
+            )}
           </div>
         </Card>
       </div>

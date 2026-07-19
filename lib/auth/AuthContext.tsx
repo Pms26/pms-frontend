@@ -61,7 +61,7 @@ export const useAuthStore = create<AuthStore>((set) => ({
     try {
       const payload = JSON.parse(atob(token.split('.')[1]));
       const user: User = {
-        id: payload.id || 1,
+        id: payload.sub || payload.id || 1,
         username: payload.username || 'admin',
         name: payload.name || 'Sidi Omar',
         role: (payload.role as UserRole) || 'admin',

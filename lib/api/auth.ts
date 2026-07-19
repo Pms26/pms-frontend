@@ -68,11 +68,22 @@ export async function loginApi(username: string, password: string): Promise<Logi
   }
 
   // ─── Appel réel vers api-gateway ──────────────────────
-  const response = await apiClient.post<LoginResponse>('/api/auth/login', {
-    username,
+  const response = await apiClient.post('/api/auth/login', {
+    email: username,
     password,
   });
-  return response.data;
+
+  const data = response.data;
+  return {
+    token: data.accessToken,
+    user: {
+      id: data.user.id,
+      username: username,
+      name: data.user.fullName,
+      role: data.user.role,
+      email: data.user.email,
+    },
+  };
 }
 
 export async function logoutApi(): Promise<void> {
