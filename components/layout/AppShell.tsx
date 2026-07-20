@@ -10,12 +10,20 @@ import Sidebar from '@/components/layout/Sidebar';
 import Header from '@/components/layout/Header';
 import GlobalModals from '@/components/layout/GlobalModals';
 
+// Pages publiques qui n'ont pas besoin du shell (sidebar/header)
+const NO_SHELL_PATHS = [
+  '/login',
+  '/register',
+  '/forgot-password',
+  '/reset-password'
+];
+
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname();
 
-  // Login page → no shell (pas de sidebar/header)
-  if (pathname === '/login') {
+  // Pages publiques → no shell (pas de sidebar/header)
+  if (NO_SHELL_PATHS.some((path) => pathname.startsWith(path))) {
     return <>{children}</>;
   }
 
