@@ -4,14 +4,20 @@
 
 // ─── Auth ────────────────────────────────────────────────
 
-export type UserRole = 'admin' | 'reception' | 'housekeeping' | 'manager' | 'auditor';
+// ─── Auth ────────────────────────────────────────────────────
+
+export type UserRole =
+  | 'admin'
+  | 'manager'
+  | 'receptionist'
+  | 'housekeeping_supervisor';
 
 export interface User {
   id: number;
   username: string;
   name: string;
   role: UserRole;
-  email?: string;
+  email: string;
 }
 
 export interface AuthState {
