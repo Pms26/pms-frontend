@@ -36,11 +36,22 @@ interface SidebarProps {
   onToggle: () => void;
 }
 
+const ROLE_LABELS = {
+  admin: 'Administrateur',
+  manager: 'Manager',
+  receptionist: 'Réceptionniste',
+  housekeeping_supervisor: 'Gouvernante'
+};
+
 function SidebarNavContent({ collapsed }: { collapsed: boolean }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
+
+  const handleLogout = async () => {
+    await logout();
+  };
 
   const isActive = (item: NavItem) => {
     if (item.match) {
@@ -53,8 +64,13 @@ function SidebarNavContent({ collapsed }: { collapsed: boolean }) {
   };
 
   const initials = user?.name
-    ? user.name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2)
-    : 'SO';
+    ? user.name
+        .split(' ')
+        .map((word) => word[0])
+        .join('')
+        .toUpperCase()
+        .slice(0, 2)
+    : 'U';
 
   return (
     <>
@@ -96,13 +112,18 @@ function SidebarNavContent({ collapsed }: { collapsed: boolean }) {
       <div className="sidebar-footer">
         <div className="user-badge">
           <div className="user-avatar">{initials}</div>
+
           <div className="user-info">
-            <div className="user-name">{user?.name || 'Sidi Omar'}</div>
-            <div className="user-role">{user?.role === 'admin' ? 'Administrateur' : user?.role || 'Utilisateur'}</div>
+            <div className="user-name">{user?.name || 'Utilisateur'}</div>
+            <div className="user-role">
+              {user ? ROLE_LABELS[user.role] : 'Session non chargée'}
+            </div>
           </div>
-          <button 
-            className="btn-logout" 
-            onClick={logout} 
+
+          <button
+            type="button"
+            className="btn-logout"
+            onClick={handleLogout}
             title="Déconnexion"
           >
             <i className="bi bi-box-arrow-right" />
