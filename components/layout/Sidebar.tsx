@@ -31,6 +31,10 @@ const GESTION_ITEMS: NavItem[] = [
   { label: 'Analytics', href: '/analytics', icon: 'bi-bar-chart-line' },
 ];
 
+const ADMIN_ITEMS: NavItem[] = [
+  { label: 'Utilisateurs', href: '/users', icon: 'bi-people' },
+];
+
 interface SidebarProps {
   collapsed: boolean;
   onToggle: () => void;
@@ -72,6 +76,9 @@ function SidebarNavContent({ collapsed }: { collapsed: boolean }) {
         .slice(0, 2)
     : 'U';
 
+  const gestionItems =
+    user?.role === 'admin' ? [...GESTION_ITEMS, ...ADMIN_ITEMS] : GESTION_ITEMS;
+
   return (
     <>
       <div className="sidebar-brand">
@@ -96,7 +103,7 @@ function SidebarNavContent({ collapsed }: { collapsed: boolean }) {
         ))}
 
         <li className="nav-section-title mt-2">GESTION</li>
-        {GESTION_ITEMS.map((item, idx) => (
+        {gestionItems.map((item, idx) => (
           <li key={idx}>
             <Link
               href={item.href}

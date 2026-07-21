@@ -13,7 +13,7 @@ export type UserRole =
   | 'housekeeping_supervisor';
 
 export interface User {
-  id: number;
+  id: string;
   username: string;
   name: string;
   role: UserRole;

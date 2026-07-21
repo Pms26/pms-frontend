@@ -2,7 +2,8 @@ import apiClient from './client';
 import type { LoginResponse, User } from '@/types';
 
 interface BackendUser {
-  id: number;
+  _id?: string;
+  id?: string;
   fullName: string;
   email: string;
   role: string;
@@ -24,9 +25,27 @@ interface BackendProfileResponse {
   user: BackendUser;
 }
 
+interface BackendUsersListResponse {
+  success: boolean;
+  users: BackendUser[];
+}
+
+interface BackendUpdateRoleResponse {
+  success: boolean;
+  user: BackendUser;
+}
+
 const mapBackendUser = (user: BackendUser): User => {
+  const identifier = user._id ?? user.id;
+
+  if (!identifier) {
+    throw new Error(
+      'Réponse backend invalide : identifiant utilisateur manquant.'
+    );
+  }
+
   return {
-    id: user.id,
+    id: identifier,
     username: user.email,
     name: user.fullName,
     email: user.email,
@@ -104,4 +123,24 @@ export async function resetPasswordApi(
     token,
     newPassword
   });
+}
+
+export async function getUsersApi(): Promise<User[]> {
+  const response = await apiClient.get<BackendUsersListResponse>(
+    '/api/auth/users'
+  );
+
+  return response.data.users.map(mapBackendUser);
+}
+
+export async function updateUserRoleApi(
+  userId: string,
+  role: string
+): Promise<User> {
+  const response = await apiClient.patch<BackendUpdateRoleResponse>(
+    `/api/auth/users/${userId}/role`,
+    { role }
+  );
+
+  return mapBackendUser(response.data.user);
 }

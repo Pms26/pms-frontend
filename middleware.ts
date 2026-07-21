@@ -9,7 +9,8 @@ const PUBLIC_PATHS = [
 ];
 
 const ROLE_RESTRICTIONS: Record<string, string[]> = {
-  '/night-audit/history': ['admin', 'manager']
+  '/night-audit/history': ['admin', 'manager'],
+  '/users': ['admin']
 };
 
 const decodeTokenPayload = (token: string) => {
