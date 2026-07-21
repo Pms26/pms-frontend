@@ -144,3 +144,8 @@ export async function updateUserRoleApi(
 
   return mapBackendUser(response.data.user);
 }
+
+export async function deleteUserApi(userId: string): Promise<void> {
+  await apiClient.delete(`/api/auth/users/${userId}`);
+}
+

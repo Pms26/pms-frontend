@@ -6,7 +6,7 @@
 
 import { useEffect, useState } from 'react';
 import axios from 'axios';
-import { getUsersApi, updateUserRoleApi } from '@/lib/api/auth';
+import { getUsersApi, updateUserRoleApi, deleteUserApi } from '@/lib/api/auth';
 import { useAuthStore } from '@/lib/auth/AuthContext';
 import type { User } from '@/types';
 
@@ -35,6 +35,7 @@ export default function UsersPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
+  const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
 
   useEffect(() => {
     const loadUsers = async () => {
@@ -96,6 +97,36 @@ export default function UsersPage() {
     }
   };
 
+  const handleDeleteUser = async (userId: string, userName: string) => {
+    const confirmed = window.confirm(
+      `Voulez-vous vraiment supprimer le compte de "${userName}" ? Cette action est irréversible.`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setError('');
+    setSuccess('');
+    setDeletingUserId(userId);
+
+    try {
+      await deleteUserApi(userId);
+
+      setUsers((current) => current.filter((u) => u.id !== userId));
+      setSuccess('Utilisateur supprimé avec succès.');
+    } catch (requestError) {
+      setError(
+        getErrorMessage(
+          requestError,
+          'Impossible de supprimer cet utilisateur.'
+        )
+      );
+    } finally {
+      setDeletingUserId(null);
+    }
+  };
+
   return (
     <div className="p-4">
       <div className="d-flex align-items-center justify-content-between mb-4">
@@ -142,6 +173,7 @@ export default function UsersPage() {
                     <th>E-mail</th>
                     <th>Rôle</th>
                     <th style={{ width: '1%' }} />
+                    <th style={{ width: '1%' }} />
                   </tr>
                 </thead>
                 <tbody>
@@ -179,6 +211,26 @@ export default function UsersPage() {
                             className="spinner-border spinner-border-sm text-primary"
                             role="status"
                           />
+                        )}
+                      </td>
+                      <td>
+                        {currentUser?.id !== u.id && (
+                          <button
+                            type="button"
+                            className="btn btn-sm btn-outline-danger"
+                            disabled={deletingUserId === u.id}
+                            onClick={() => handleDeleteUser(u.id, u.name)}
+                            title="Supprimer l'utilisateur"
+                          >
+                            {deletingUserId === u.id ? (
+                              <span
+                                className="spinner-border spinner-border-sm"
+                                role="status"
+                              />
+                            ) : (
+                              <i className="bi bi-trash" />
+                            )}
+                          </button>
                         )}
                       </td>
                     </tr>
