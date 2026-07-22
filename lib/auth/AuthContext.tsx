@@ -90,11 +90,11 @@ export const useAuthStore = create<AuthStore>((set) => ({
       let token = localStorage.getItem('pms-token');
 
       if (!token) {
-        token = await refreshTokenApi();
-        persistAccessToken(token);
-      } else {
-        setAccessToken(token);
+        set({ user: null, token: null, isAuthenticated: false, isHydrating: false });
+        return;
       }
+
+      setAccessToken(token);
 
       const user = await getProfileApi();
 

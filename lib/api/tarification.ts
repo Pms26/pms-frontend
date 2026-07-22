@@ -111,6 +111,7 @@ export async function updateTarif(cat: string, data: Partial<TarifCategory>): Pr
     return { ...tarif, ...data };
   }
 
-  const res = await apiClient.put(`/api/tarification/seasons/${encodeURIComponent(cat)}`, data);
-  return res.data;
+  const prices = { basse: data.basse, moyenne: data.moyenne, haute: data.haute, pics: data.pics };
+  await apiClient.put(`/api/tarification/rateplans/category/${encodeURIComponent(cat)}`, prices);
+  return { cat, basse: data.basse || 0, moyenne: data.moyenne || 0, haute: data.haute || 0, pics: data.pics || 0 };
 }
