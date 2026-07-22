@@ -180,13 +180,6 @@ function LoginForm() {
             )}
           </button>
 
-          <p className="text-center mt-4 mb-0">
-            Vous n&apos;avez pas de compte ?{' '}
-            <Link href="/register" className="forgot-link">
-              Créer un compte
-            </Link>
-          </p>
-
           <div className="biometric-row mt-4">
             <button
               type="button"

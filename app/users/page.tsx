@@ -6,6 +6,7 @@
 
 import { useEffect, useState } from 'react';
 import axios from 'axios';
+import Link from 'next/link';
 import { getUsersApi, updateUserRoleApi, deleteUserApi } from '@/lib/api/auth';
 import { useAuthStore } from '@/lib/auth/AuthContext';
 import type { User } from '@/types';
@@ -17,6 +18,13 @@ const ROLE_LABELS: Record<string, string> = {
   housekeeping_supervisor: 'Gouvernante'
 };
 
+const ROLE_BADGE_CLASSES: Record<string, string> = {
+  admin: 'bg-danger-subtle text-danger-emphasis',
+  manager: 'bg-primary-subtle text-primary-emphasis',
+  receptionist: 'bg-info-subtle text-info-emphasis',
+  housekeeping_supervisor: 'bg-warning-subtle text-warning-emphasis'
+};
+
 const ROLE_OPTIONS = Object.keys(ROLE_LABELS);
 
 const getErrorMessage = (error: unknown, fallback: string) => {
@@ -26,6 +34,15 @@ const getErrorMessage = (error: unknown, fallback: string) => {
 
   return fallback;
 };
+
+const getInitials = (name: string) =>
+  name
+    .split(' ')
+    .filter(Boolean)
+    .map((word) => word[0])
+    .join('')
+    .toUpperCase()
+    .slice(0, 2);
 
 export default function UsersPage() {
   const currentUser = useAuthStore((s) => s.user);
@@ -67,7 +84,6 @@ export default function UsersPage() {
 
     const previousUsers = users;
 
-    // Optimistic update
     setUsers((current) =>
       current.map((u) =>
         u.id === userId ? { ...u, role: newRole as User['role'] } : u
@@ -83,7 +99,6 @@ export default function UsersPage() {
 
       setSuccess('Rôle mis à jour avec succès.');
     } catch (requestError) {
-      // Rollback en cas d'erreur
       setUsers(previousUsers);
 
       setError(
@@ -129,13 +144,20 @@ export default function UsersPage() {
 
   return (
     <div className="p-4">
-      <div className="d-flex align-items-center justify-content-between mb-4">
+      <div className="d-flex align-items-start justify-content-between mb-4 flex-wrap gap-3">
         <div>
           <h1 className="h4 mb-1">Gestion des utilisateurs</h1>
           <p className="text-muted mb-0">
-            Consultez les comptes et modifiez les rôles des utilisateurs.
+            Consultez les comptes et gérez les rôles de votre équipe.
           </p>
         </div>
+
+        {currentUser?.role === 'admin' && (
+          <Link href="/register" className="btn btn-pms">
+            <i className="bi bi-plus-lg me-2" />
+            Ajouter un compte
+          </Link>
+        )}
       </div>
 
       {error && (
@@ -152,7 +174,16 @@ export default function UsersPage() {
         </div>
       )}
 
-      <div className="card">
+      <div className="card border-0 shadow-sm">
+        <div className="card-header bg-white border-bottom d-flex align-items-center justify-content-between py-3">
+          <span className="fw-semibold">Comptes utilisateurs</span>
+          {!loading && (
+            <span className="badge bg-light text-dark border">
+              {users.length} {users.length > 1 ? 'utilisateurs' : 'utilisateur'}
+            </span>
+          )}
+        </div>
+
         <div className="card-body p-0">
           {loading ? (
             <div className="text-center py-5">
@@ -168,59 +199,78 @@ export default function UsersPage() {
             <div className="table-responsive">
               <table className="table table-hover align-middle mb-0">
                 <thead>
-                  <tr>
-                    <th>Nom</th>
-                    <th>E-mail</th>
-                    <th>Rôle</th>
-                    <th style={{ width: '1%' }} />
-                    <th style={{ width: '1%' }} />
+                  <tr className="text-uppercase text-muted small">
+                    <th className="ps-4 py-3" style={{ fontSize: '0.75rem', letterSpacing: '0.03em' }}>
+                      Utilisateur
+                    </th>
+                    <th className="py-3" style={{ fontSize: '0.75rem', letterSpacing: '0.03em' }}>
+                      Rôle
+                    </th>
+                    <th className="py-3 text-end pe-4" style={{ fontSize: '0.75rem', letterSpacing: '0.03em' }}>
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {users.map((u) => (
                     <tr key={u.id}>
-                      <td>
-                        {u.name}
-                        {currentUser?.id === u.id && (
-                          <span className="badge bg-secondary ms-2">
-                            Vous
-                          </span>
-                        )}
+                      <td className="ps-4">
+                        <div className="d-flex align-items-center gap-3">
+                          <div
+                            className="d-flex align-items-center justify-content-center rounded-circle bg-primary-subtle text-primary-emphasis fw-semibold"
+                            style={{ width: '38px', height: '38px', fontSize: '0.85rem', flexShrink: 0 }}
+                          >
+                            {getInitials(u.name)}
+                          </div>
+
+                          <div>
+                            <div className="fw-medium d-flex align-items-center gap-2">
+                              {u.name}
+                              {currentUser?.id === u.id && (
+                                <span className="badge bg-secondary-subtle text-secondary-emphasis fw-normal">
+                                  Vous
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-muted small">{u.email}</div>
+                          </div>
+                        </div>
                       </td>
-                      <td>{u.email}</td>
+
                       <td>
-                        <select
-                          className="form-select form-select-sm"
-                          style={{ maxWidth: '220px' }}
-                          value={u.role}
-                          disabled={savingUserId === u.id}
-                          onChange={(event) =>
-                            handleRoleChange(u.id, event.target.value)
-                          }
-                        >
-                          {ROLE_OPTIONS.map((roleKey) => (
-                            <option key={roleKey} value={roleKey}>
-                              {ROLE_LABELS[roleKey] || roleKey}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="d-flex align-items-center gap-2">
+                          <select
+                            className="form-select form-select-sm"
+                            style={{ maxWidth: '200px' }}
+                            value={u.role}
+                            disabled={savingUserId === u.id}
+                            onChange={(event) =>
+                              handleRoleChange(u.id, event.target.value)
+                            }
+                          >
+                            {ROLE_OPTIONS.map((roleKey) => (
+                              <option key={roleKey} value={roleKey}>
+                                {ROLE_LABELS[roleKey] || roleKey}
+                              </option>
+                            ))}
+                          </select>
+
+                          {savingUserId === u.id && (
+                            <span
+                              className="spinner-border spinner-border-sm text-primary"
+                              role="status"
+                            />
+                          )}
+                        </div>
                       </td>
-                      <td>
-                        {savingUserId === u.id && (
-                          <span
-                            className="spinner-border spinner-border-sm text-primary"
-                            role="status"
-                          />
-                        )}
-                      </td>
-                      <td>
+
+                      <td className="text-end pe-4">
                         {currentUser?.id !== u.id && (
                           <button
                             type="button"
                             className="btn btn-sm btn-outline-danger"
                             disabled={deletingUserId === u.id}
                             onClick={() => handleDeleteUser(u.id, u.name)}
-                            title="Supprimer l'utilisateur"
                           >
                             {deletingUserId === u.id ? (
                               <span
@@ -228,7 +278,10 @@ export default function UsersPage() {
                                 role="status"
                               />
                             ) : (
-                              <i className="bi bi-trash" />
+                              <>
+                                <i className="bi bi-trash me-1" />
+                                Supprimer
+                              </>
                             )}
                           </button>
                         )}

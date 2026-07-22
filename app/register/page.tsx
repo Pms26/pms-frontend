@@ -43,7 +43,7 @@ export default function RegisterPage() {
     try {
       await registerApi(fullName.trim(), email.trim(), password);
 
-      setSuccess('Compte créé avec succès. Vous pouvez maintenant vous connecter.');
+      setSuccess('Compte créé avec succès.');
       setFullName('');
       setEmail('');
       setPassword('');
@@ -178,9 +178,9 @@ export default function RegisterPage() {
           </button>
 
           <p className="text-center mt-4 mb-0">
-            Vous avez déjà un compte ?{' '}
-            <Link href="/login" className="forgot-link">
-              Se connecter
+            <Link href="/users" className="forgot-link">
+              <i className="bi bi-arrow-left me-1" />
+              Retour à la gestion des utilisateurs
             </Link>
           </p>
         </form>
