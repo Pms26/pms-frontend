@@ -71,7 +71,7 @@ function mapBookingToFrontend(b: any): Reservation {
   const rawStatus = b.status || 'status_option';
 
   return {
-    id: b.reference || b._id || b.id,
+    id: b._id || b.reference || b.id,
     client: customerName,
     room: String(roomNumber),
     arrival: b.checkInDate ? b.checkInDate.slice(0, 10) : '',

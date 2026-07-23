@@ -30,7 +30,7 @@ const MOCK_FOLIO_B: FolioEntry[] = [
 
 function mapRoomToFrontend(r: any): Reservation {
   return {
-    id: r.bookingId || r.bookingRef || r.id || r.roomNumber,
+    id: r.bookingId || r._id || r.bookingRef || r.id || r.roomNumber,
     client: r.guestName || r.customerName || 'Client',
     room: r.roomNumber || r.numero || r.id,
     arrival: r.checkInDate ? r.checkInDate.slice(0, 10) : '',
