@@ -3,14 +3,14 @@ import type { NextRequest } from 'next/server';
 
 const PUBLIC_PATHS = [
   '/login',
-  '/register',
   '/forgot-password',
   '/reset-password'
 ];
 
 const ROLE_RESTRICTIONS: Record<string, string[]> = {
   '/night-audit/history': ['admin', 'manager'],
-  '/users': ['admin']
+  '/users': ['admin'],
+  '/register': ['admin']
 };
 
 const decodeTokenPayload = (token: string) => {
