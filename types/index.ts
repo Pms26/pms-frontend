@@ -10,7 +10,8 @@ export type UserRole =
   | 'admin'
   | 'manager'
   | 'receptionist'
-  | 'housekeeping_supervisor';
+  | 'housekeeping_supervisor'
+  | 'comptable';
 
 export interface User {
   id: string;

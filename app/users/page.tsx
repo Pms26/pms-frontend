@@ -15,14 +15,16 @@ const ROLE_LABELS: Record<string, string> = {
   admin: 'Administrateur',
   manager: 'Manager',
   receptionist: 'Réceptionniste',
-  housekeeping_supervisor: 'Gouvernante'
+  housekeeping_supervisor: 'Gouvernante',
+  comptable: 'Comptable'
 };
 
 const ROLE_BADGE_CLASSES: Record<string, string> = {
   admin: 'bg-danger-subtle text-danger-emphasis',
   manager: 'bg-primary-subtle text-primary-emphasis',
   receptionist: 'bg-info-subtle text-info-emphasis',
-  housekeeping_supervisor: 'bg-warning-subtle text-warning-emphasis'
+  housekeeping_supervisor: 'bg-warning-subtle text-warning-emphasis',
+  comptable: 'bg-success-subtle text-success-emphasis'
 };
 
 const ROLE_OPTIONS = Object.keys(ROLE_LABELS);

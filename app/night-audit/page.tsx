@@ -10,8 +10,11 @@ import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useModalToast } from '@/components/context/ModalToastContext';
 import { getNightAuditStatus, getNightAuditReports, closeNightAudit } from '@/lib/api/nightAudit';
+import { useAuthStore } from '@/lib/auth/AuthContext';
 
 export default function NightAuditPage() {
+  const user = useAuthStore((s) => s.user);
+  const isComptable = user?.role === 'comptable';
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   const { data: status, isLoading } = useQuery({
@@ -56,20 +59,22 @@ export default function NightAuditPage() {
       </div>
 
       {/* ── Warning Banner ── */}
-      <div className="night-audit-warning glass-card p-4 mb-4">
-        <div className="d-flex align-items-center gap-3">
-          <div className="na-icon">
-            <i className="bi bi-shield-exclamation" />
-          </div>
-          <div>
-            <div className="na-warning-title">Opération Irréversible</div>
-            <div className="na-warning-desc">
-              Une fois lancée, la clôture valide définitivement la journée <strong>J</strong>.{' '}
-              Aucune modification, saisie ou annulation n&apos;est possible après validation.
+      {!isComptable && (
+        <div className="night-audit-warning glass-card p-4 mb-4">
+          <div className="d-flex align-items-center gap-3">
+            <div className="na-icon">
+              <i className="bi bi-shield-exclamation" />
+            </div>
+            <div>
+              <div className="na-warning-title">Opération Irréversible</div>
+              <div className="na-warning-desc">
+                Une fois lancée, la clôture valide définitivement la journée <strong>J</strong>.{' '}
+                Aucune modification, saisie ou annulation n&apos;est possible après validation.
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* ── Pre-audit checks ── */}
       <div className="row g-3 mb-4">
@@ -150,17 +155,19 @@ export default function NightAuditPage() {
       </div>
 
       {/* ── Close Button ── */}
-      <button
-        className="btn btn-danger-pms btn-lg w-100"
-        onClick={() => setConfirmOpen(true)}
-        disabled={closeMutation.isPending}
-      >
-        <i className="bi bi-moon-stars-fill me-2" />
-        Lancer la Clôture de Journée (J → J+1)
-      </button>
+      {!isComptable && (
+        <button
+          className="btn btn-danger-pms btn-lg w-100"
+          onClick={() => setConfirmOpen(true)}
+          disabled={closeMutation.isPending}
+        >
+          <i className="bi bi-moon-stars-fill me-2" />
+          Lancer la Clôture de Journée (J → J+1)
+        </button>
+      )}
 
       {/* ── Confirmation Modal ── */}
-      {confirmOpen && (
+      {confirmOpen && !isComptable && (
         <div
           className="modal fade show d-block"
           style={{ background: 'rgba(15,23,42,0.5)' }}
