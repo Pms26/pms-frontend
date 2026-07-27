@@ -8,9 +8,14 @@ const PUBLIC_PATHS = [
 ];
 
 const ROLE_RESTRICTIONS: Record<string, string[]> = {
-  '/night-audit/history': ['admin', 'manager'],
+  '/night-audit/history': ['admin', 'manager', 'comptable'],
+  '/front-office': ['admin', 'manager', 'receptionist', 'comptable'],
+  '/tarification': ['admin', 'manager', 'receptionist', 'comptable'],
   '/users': ['admin'],
-  '/register': ['admin']
+  '/register': ['admin'],
+  '/planning': ['admin', 'manager', 'receptionist'],
+  '/reservations': ['admin', 'manager', 'receptionist'],
+  '/housekeeping': ['admin', 'manager', 'housekeeping_supervisor', 'receptionist']
 };
 
 const decodeTokenPayload = (token: string) => {

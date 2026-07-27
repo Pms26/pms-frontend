@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import FrontOfficeTabs from '@/components/front-office/FrontOfficeTabs';
 import { useModalToast } from '@/components/context/ModalToastContext';
 import { getPendingCheckOuts, performCheckOut } from '@/lib/api/frontOffice';
+import { useAuthStore } from '@/lib/auth/AuthContext';
 import type { PaymentMode } from '@/types';
 
 const PAYMENT_MODES = [
@@ -16,6 +17,8 @@ const PAYMENT_MODES = [
 ];
 
 export default function FrontOfficeCheckOutPage() {
+  const user = useAuthStore((s) => s.user);
+  const isComptable = user?.role === 'comptable';
   const [selectedCheckoutId, setSelectedCheckoutId] = useState<string | null>(null);
   const [selectedPayments, setSelectedPayments] = useState<PaymentMode[]>([]);
   const { showToast } = useModalToast();
@@ -113,52 +116,78 @@ export default function FrontOfficeCheckOutPage() {
 
           <div className="col-lg-7">
             <div className="glass-card p-4">
-              <h6 className="fw-600 mb-3">Encaissement &amp; Validation</h6>
-
-              <div className="checkout-summary mb-4">
-                <div className="summary-row">
-                  <span>Hébergement</span>
-                  <span>3 000 DH</span>
-                </div>
-                <div className="summary-row">
-                  <span>Extras / Bar</span>
-                  <span>450 DH</span>
-                </div>
-                <div className="summary-row">
-                  <span>Taxe de séjour</span>
-                  <span>90 DH</span>
-                </div>
-                <div className="summary-row total">
-                  <span>TOTAL DÛ</span>
-                  <span>3 540 DH</span>
-                </div>
-              </div>
-
-              <h6 className="fw-600 mb-2">Mode de règlement</h6>
-              <div className="payment-modes row g-2 mb-4">
-                {PAYMENT_MODES.map((mode) => (
-                  <div key={mode.id} className="col-6 col-md-4">
-                    <label className={`pay-mode-card ${selectedPayments.includes(mode.id as PaymentMode) ? 'active' : ''}`}>
-                      <input
-                        type="checkbox"
-                        checked={selectedPayments.includes(mode.id as PaymentMode)}
-                        onChange={() => togglePaymentMode(mode.id as PaymentMode)}
-                      />
-                      <i className={`bi ${mode.icon}`} />
-                      <span>{mode.label}</span>
-                    </label>
+              {isComptable ? (
+                <>
+                  <h6 className="fw-600 mb-3">Résumé du Départ</h6>
+                  <div className="checkout-summary">
+                    <div className="summary-row">
+                      <span>Hébergement</span>
+                      <span>3 000 DH</span>
+                    </div>
+                    <div className="summary-row">
+                      <span>Extras / Bar</span>
+                      <span>450 DH</span>
+                    </div>
+                    <div className="summary-row">
+                      <span>Taxe de séjour</span>
+                      <span>90 DH</span>
+                    </div>
+                    <div className="summary-row total">
+                      <span>TOTAL DÛ</span>
+                      <span>3 540 DH</span>
+                    </div>
                   </div>
-                ))}
-              </div>
+                </>
+              ) : (
+                <>
+                  <h6 className="fw-600 mb-3">Encaissement &amp; Validation</h6>
 
-              <div className="alert-security mb-3">
-                <i className="bi bi-shield-lock-fill me-2" />
-                Après validation, le dossier sera définitivement verrouillé.
-              </div>
+                  <div className="checkout-summary mb-4">
+                    <div className="summary-row">
+                      <span>Hébergement</span>
+                      <span>3 000 DH</span>
+                    </div>
+                    <div className="summary-row">
+                      <span>Extras / Bar</span>
+                      <span>450 DH</span>
+                    </div>
+                    <div className="summary-row">
+                      <span>Taxe de séjour</span>
+                      <span>90 DH</span>
+                    </div>
+                    <div className="summary-row total">
+                      <span>TOTAL DÛ</span>
+                      <span>3 540 DH</span>
+                    </div>
+                  </div>
 
-              <button type="button" className="btn btn-pms w-100 py-3" onClick={handleValidateCheckout}>
-                <i className="bi bi-check-circle me-2" /> Valider le Check-out
-              </button>
+                  <h6 className="fw-600 mb-2">Mode de règlement</h6>
+                  <div className="payment-modes row g-2 mb-4">
+                    {PAYMENT_MODES.map((mode) => (
+                      <div key={mode.id} className="col-6 col-md-4">
+                        <label className={`pay-mode-card ${selectedPayments.includes(mode.id as PaymentMode) ? 'active' : ''}`}>
+                          <input
+                            type="checkbox"
+                            checked={selectedPayments.includes(mode.id as PaymentMode)}
+                            onChange={() => togglePaymentMode(mode.id as PaymentMode)}
+                          />
+                          <i className={`bi ${mode.icon}`} />
+                          <span>{mode.label}</span>
+                        </label>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="alert-security mb-3">
+                    <i className="bi bi-shield-lock-fill me-2" />
+                    Après validation, le dossier sera définitivement verrouillé.
+                  </div>
+
+                  <button type="button" className="btn btn-pms w-100 py-3" onClick={handleValidateCheckout}>
+                    <i className="bi bi-check-circle me-2" /> Valider le Check-out
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>

@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import FrontOfficeTabs from '@/components/front-office/FrontOfficeTabs';
 import { useModalToast } from '@/components/context/ModalToastContext';
 import { getPendingCheckIns, performCheckIn } from '@/lib/api/frontOffice';
+import { useAuthStore } from '@/lib/auth/AuthContext';
 
 
 const FOLIO_A_LINES = [
@@ -17,6 +18,8 @@ const FOLIO_A_LINES = [
 ];
 
 export default function FrontOfficeCheckInPage() {
+  const user = useAuthStore((s) => s.user);
+  const isComptable = user?.role === 'comptable';
   const [activeFolio, setActiveFolio] = useState<'A' | 'B'>('A');
   const { showToast } = useModalToast();
   const queryClient = useQueryClient();
@@ -77,10 +80,11 @@ export default function FrontOfficeCheckInPage() {
                       type="button"
                       className="checkin-btn"
                       onClick={() => handleCheckIn(entry.id)}
-                      disabled={mutation.status === 'pending'}
+                      disabled={mutation.status === 'pending' || isComptable}
+                      style={isComptable ? { opacity: 0.4, pointerEvents: 'none' } : undefined}
                     >
                       <i className="bi bi-check me-1" />
-                      Check-in
+                      {isComptable ? 'Consultation' : 'Check-in'}
                     </button>
                   </div>
                 ))
@@ -153,9 +157,11 @@ export default function FrontOfficeCheckInPage() {
                 <button type="button" className="btn btn-ghost btn-sm" onClick={handlePrint}>
                   <i className="bi bi-printer me-1" /> Imprimer
                 </button>
-                <button type="button" className="btn btn-ghost btn-sm" onClick={handleAddExtra}>
-                  <i className="bi bi-plus me-1" /> Ajouter extra
-                </button>
+                {!isComptable && (
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={handleAddExtra}>
+                    <i className="bi bi-plus me-1" /> Ajouter extra
+                  </button>
+                )}
               </div>
             </div>
           </div>

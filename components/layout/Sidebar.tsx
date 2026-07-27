@@ -40,11 +40,12 @@ interface SidebarProps {
   onToggle: () => void;
 }
 
-const ROLE_LABELS = {
+const ROLE_LABELS: Record<string, string> = {
   admin: 'Administrateur',
   manager: 'Manager',
   receptionist: 'Réceptionniste',
-  housekeeping_supervisor: 'Gouvernante'
+  housekeeping_supervisor: 'Gouvernante',
+  comptable: 'Comptable'
 };
 
 function SidebarNavContent({ collapsed }: { collapsed: boolean }) {
@@ -76,8 +77,20 @@ function SidebarNavContent({ collapsed }: { collapsed: boolean }) {
         .slice(0, 2)
     : 'U';
 
+  const isComptable = user?.role === 'comptable';
+
   const gestionItems =
     user?.role === 'admin' ? [...GESTION_ITEMS, ...ADMIN_ITEMS] : GESTION_ITEMS;
+
+  const exploitationItems = isComptable
+    ? EXPLOITATION_ITEMS.filter((item) => item.href === '/dashboard' || item.href === '/front-office/check-in')
+    : EXPLOITATION_ITEMS;
+
+  const filteredGestionItems = isComptable
+    ? gestionItems.filter((item) =>
+        item.href.startsWith('/night-audit') || item.href.startsWith('/tarification') || item.href.startsWith('/analytics')
+      )
+    : gestionItems;
 
   return (
     <>
@@ -90,7 +103,7 @@ function SidebarNavContent({ collapsed }: { collapsed: boolean }) {
 
       <ul className="sidebar-nav">
         <li className="nav-section-title">EXPLOITATION</li>
-        {EXPLOITATION_ITEMS.map((item, idx) => (
+        {exploitationItems.map((item, idx) => (
           <li key={idx}>
             <Link
               href={item.href}
@@ -103,7 +116,7 @@ function SidebarNavContent({ collapsed }: { collapsed: boolean }) {
         ))}
 
         <li className="nav-section-title mt-2">GESTION</li>
-        {gestionItems.map((item, idx) => (
+        {filteredGestionItems.map((item, idx) => (
           <li key={idx}>
             <Link
               href={item.href}
