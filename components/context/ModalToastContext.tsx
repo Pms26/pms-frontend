@@ -18,6 +18,12 @@ interface ModalToastContextValue {
   toastMessage: string | null;
   showToast: (msg: string) => void;
   hideToast: () => void;
+  isClosureConfirmOpen: boolean;
+  openClosureConfirm: () => void;
+  closeClosureConfirm: () => void;
+  closureDetailDate: string | null;
+  openClosureDetail: (date: string) => void;
+  closeClosureDetail: () => void;
 }
 
 const ModalToastContext = createContext<ModalToastContextValue | undefined>(undefined);
@@ -29,6 +35,8 @@ export function ModalToastProvider({ children }: { children: React.ReactNode }) 
   const [selectedRoomStatus, setSelectedRoomStatus] = useState<RoomStatus | null>(null);
   const [selectedRoomReason, setSelectedRoomReason] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isClosureConfirmOpen, setClosureConfirmOpen] = useState(false);
+  const [closureDetailDate, setClosureDetailDate] = useState<string | null>(null);
 
   const openReservation = () => setReservationOpen(true);
   const closeReservation = () => setReservationOpen(false);
@@ -46,10 +54,13 @@ export function ModalToastProvider({ children }: { children: React.ReactNode }) 
   };
   const showToast = (msg: string) => {
     setToastMessage(msg);
-    // auto-hide after 3s
     setTimeout(() => setToastMessage(null), 3000);
   };
   const hideToast = () => setToastMessage(null);
+  const openClosureConfirm = () => setClosureConfirmOpen(true);
+  const closeClosureConfirm = () => setClosureConfirmOpen(false);
+  const openClosureDetail = (date: string) => setClosureDetailDate(date);
+  const closeClosureDetail = () => setClosureDetailDate(null);
 
   const value: ModalToastContextValue = {
     isReservationOpen,
@@ -66,6 +77,12 @@ export function ModalToastProvider({ children }: { children: React.ReactNode }) 
     toastMessage,
     showToast,
     hideToast,
+    isClosureConfirmOpen,
+    openClosureConfirm,
+    closeClosureConfirm,
+    closureDetailDate,
+    openClosureDetail,
+    closeClosureDetail,
   };
 
   return (

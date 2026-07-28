@@ -149,34 +149,86 @@ export interface FiscaliteItem {
 
 export interface NightAuditStatus {
   businessDate: string;
+  status: 'en_cours' | 'echouee';
   isOpen: boolean;
-  lastClosedDate: string | null;
-  checks: NightAuditCheck[];
+  lastClosure: {
+    businessDate: string;
+    closedAt: string;
+    closedByRole: string;
+  } | null;
+  errorDetails: {
+    service: string;
+    code: string;
+  } | null;
 }
 
-export interface NightAuditCheck {
-  id: string;
-  label: string;
-  description: string;
-  status: 'ok' | 'warning' | 'error';
-  icon: string;
-  color: string;
-}
-
-export interface NightAuditReport {
-  icon: string;
-  label: string;
-  color: string;
+export interface CheckBalanceResponse {
+  businessDate: string;
+  equilibre: boolean;
+  totalDebit: number;
+  totalCredit: number;
+  ecart: number;
+  decomposition: {
+    debitSources: Record<string, number>;
+    creditSources: Record<string, number>;
+  };
 }
 
 export interface Closure {
-  id: string;
   businessDate: string;
+  status: 'cloturee' | 'echouee';
+  closedByRole: string;
   closedAt: string;
-  closedBy: string;
+  totalDebit: number | null;
+  totalCredit: number | null;
+  ecart: number | null;
+  reportsGenerated: number;
   justification?: string;
-  revenue: number;
-  occupancyRate: number;
+  warnings?: Array<{
+    report: string;
+    reason: string;
+  }>;
+  errorDetails?: {
+    code: string;
+  };
+}
+
+export interface RevenueBreakdown {
+  category: 'lodging' | 'fb' | 'extras' | 'tourism_tax';
+  amountHt: number;
+  tvaRate: number;
+  tvaAmount: number;
+  amountTtc: number;
+}
+
+export interface PaymentSummary {
+  paymentMethod: 'cash' | 'card' | 'wire_transfer';
+  totalAmount: number;
+  transactionCount: number;
+}
+
+export interface DebtorSummary {
+  debtorName: string;
+  debtorReference: string;
+  amount: number;
+  invoiceCount: number;
+}
+
+export interface ClosureDetail {
+  closure: Closure;
+  revenueBreakdown: RevenueBreakdown[];
+  paymentSummary: PaymentSummary[];
+  debtorsSummary: DebtorSummary[];
+}
+
+export interface NightAuditReport {
+  id: string;
+  type: string;
+  name: string;
+  fileSize?: number;
+  checksum?: string;
+  generatedAt?: string;
+  downloadUrl?: string;
 }
 
 // ─── Analytics / KPIs ────────────────────────────────────
