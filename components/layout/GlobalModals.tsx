@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useModalToast } from '@/components/context/ModalToastContext';
 import { updateRoomStatus } from '@/lib/api/housekeeping';
-import type { RoomStatus } from '@/types';
+import { getClosureDetail, downloadReport, getClosureReports } from '@/lib/api/nightAudit';
+import type { RoomStatus, ClosureDetail, NightAuditReport } from '@/types';
 
 export function ReservationModal() {
   const { isReservationOpen, closeReservation } = useModalToast();
@@ -18,7 +19,6 @@ export function ReservationModal() {
             <button type="button" className="btn-close btn-close-white" onClick={() => closeReservation()} />
           </div>
           <div className="modal-body p-4">
-            {/* Body HTML copied from original index.html — structure and classes kept identical */}
             <div className="row g-3">
               <div className="col-lg-6">
                 <div className="modal-section-title mb-2"><i className="bi bi-person-fill me-2" />Fiche Client</div>
@@ -109,8 +109,8 @@ export function ReservationModal() {
           </div>
           <div className="modal-footer pms-modal-footer">
             <button className="btn btn-ghost" onClick={() => closeReservation()}>Annuler</button>
-            <button className="btn btn-outline-accent" onClick={() => { /* placeholder save */ closeReservation(); }}><i className="bi bi-clock me-1" />Enregistrer en Option</button>
-            <button className="btn btn-pms" onClick={() => { /* placeholder confirm */ closeReservation(); }}><i className="bi bi-check-circle me-1" />Confirmer la Réservation</button>
+            <button className="btn btn-outline-accent" onClick={() => { closeReservation(); }}><i className="bi bi-clock me-1" />Enregistrer en Option</button>
+            <button className="btn btn-pms" onClick={() => { closeReservation(); }}><i className="bi bi-check-circle me-1" />Confirmer la Réservation</button>
           </div>
         </div>
       </div>
@@ -192,6 +192,271 @@ export function RoomModal() {
           <div className="modal-footer pms-modal-footer">
             <button className="btn btn-ghost" onClick={() => closeRoom()}>Annuler</button>
             <button className="btn btn-pms" onClick={handleApply}>Appliquer</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function ClosureConfirmModal({
+  onConfirm,
+  isPending,
+  businessDate,
+}: {
+  onConfirm: (justification?: string) => void;
+  isPending: boolean;
+  businessDate: string;
+}) {
+  const { isClosureConfirmOpen, closeClosureConfirm } = useModalToast();
+  const [justification, setJustification] = useState('');
+  const [showJustification, setShowJustification] = useState(false);
+
+  if (!isClosureConfirmOpen) return null;
+
+  return (
+    <div
+      className="modal fade show d-block"
+      style={{ background: 'rgba(15,23,42,0.5)' }}
+      tabIndex={-1}
+    >
+      <div className="modal-dialog modal-dialog-centered">
+        <div className="modal-content pms-modal">
+          <div className="pms-modal-header">
+            <h5 className="modal-title">Confirmer la Clôture</h5>
+          </div>
+          <div className="modal-body p-4 text-center">
+            <div className="na-modal-icon mb-3">
+              <i className="bi bi-moon-stars-fill" />
+            </div>
+            <h5 className="fw-700 mb-2">Journée {businessDate}</h5>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
+              Êtes-vous certain de vouloir clôturer la journée ? Cette opération est <strong>irréversible</strong>.
+            </p>
+            <div className="mb-3 text-start">
+              <button
+                className="btn btn-ghost btn-sm mb-2"
+                onClick={() => setShowJustification(!showJustification)}
+              >
+                <i className={`bi bi-${showJustification ? 'chevron-up' : 'chevron-down'} me-1`} />
+                {showJustification ? 'Masquer' : 'Ajouter une justification'}
+              </button>
+              {showJustification && (
+                <textarea
+                  className="form-control pms-input"
+                  rows={3}
+                  placeholder="Justification de l'écart (requis si écart non nul pour admin)"
+                  value={justification}
+                  onChange={(e) => setJustification(e.target.value)}
+                />
+              )}
+            </div>
+          </div>
+          <div className="pms-modal-footer">
+            <button
+              className="btn btn-ghost"
+              onClick={() => {
+                closeClosureConfirm();
+                setJustification('');
+                setShowJustification(false);
+              }}
+            >
+              Annuler
+            </button>
+            <button
+              className="btn btn-danger-pms"
+              onClick={() => {
+                onConfirm(justification || undefined);
+                setJustification('');
+                setShowJustification(false);
+              }}
+              disabled={isPending}
+            >
+              {isPending ? (
+                <><span className="spinner-border spinner-border-sm me-2" />Clôture en cours...</>
+              ) : (
+                <><i className="bi bi-check-lg me-1" />Confirmer la clôture</>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function ClosureDetailModal({ userRole }: { userRole?: string }) {
+  const { closureDetailDate, closeClosureDetail } = useModalToast();
+
+  const { data: detail, isLoading } = useQuery<ClosureDetail>({
+    queryKey: ['closure-detail', closureDetailDate],
+    queryFn: () => getClosureDetail(closureDetailDate!),
+    enabled: !!closureDetailDate,
+  });
+
+  const { data: reports } = useQuery<NightAuditReport[]>({
+    queryKey: ['closure-reports', closureDetailDate],
+    queryFn: () => getClosureReports(closureDetailDate!),
+    enabled: !!closureDetailDate,
+  });
+
+  if (!closureDetailDate) return null;
+
+  const handleDownload = async (reportId: string) => {
+    if (!closureDetailDate) return;
+    try {
+      await downloadReport(closureDetailDate, reportId);
+    } catch {
+      // error handled by the downloadReport function
+    }
+  };
+
+  return (
+    <div
+      className="modal fade show d-block"
+      style={{ background: 'rgba(15,23,42,0.5)' }}
+      tabIndex={-1}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) closeClosureDetail();
+      }}
+    >
+      <div className="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div className="modal-content pms-modal">
+          <div className="pms-modal-header">
+            <h5 className="modal-title">
+              <i className="bi bi-file-earmark-bar-graph me-2" />
+              Détail Clôture — {closureDetailDate}
+            </h5>
+            <button type="button" className="btn-close btn-close-white" onClick={closeClosureDetail} />
+          </div>
+          <div className="modal-body p-4">
+            {isLoading ? (
+              <div className="text-center py-4">
+                <span className="spinner-border spinner-border-sm me-2" />
+                Chargement...
+              </div>
+            ) : detail ? (
+              <>
+                {/* Revenue Breakdown */}
+                <h6 className="fw-600 mb-3"><i className="bi bi-cash-stack me-2" />Ventilation des Revenus</h6>
+                <div className="table-responsive mb-4">
+                  <table className="table table-sm table-bordered" style={{ fontSize: '0.82rem' }}>
+                    <thead>
+                      <tr className="table-light">
+                        <th>Catégorie</th>
+                        <th className="text-end">HT</th>
+                        <th className="text-end">TVA %</th>
+                        <th className="text-end">TVA</th>
+                        <th className="text-end">TTC</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detail.revenueBreakdown.map((r, i) => (
+                        <tr key={i}>
+                          <td className="text-capitalize">{r.category.replace('_', ' ')}</td>
+                          <td className="text-end">{r.amountHt.toLocaleString('fr-FR')} DH</td>
+                          <td className="text-end">{(r.tvaRate * 100).toFixed(0)}%</td>
+                          <td className="text-end">{r.tvaAmount.toLocaleString('fr-FR')} DH</td>
+                          <td className="text-end fw-600">{r.amountTtc.toLocaleString('fr-FR')} DH</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Payment Summary */}
+                <h6 className="fw-600 mb-3"><i className="bi bi-credit-card me-2" />Récapitulatif Paiements</h6>
+                <div className="table-responsive mb-4">
+                  <table className="table table-sm table-bordered" style={{ fontSize: '0.82rem' }}>
+                    <thead>
+                      <tr className="table-light">
+                        <th>Moyen de paiement</th>
+                        <th className="text-end">Total</th>
+                        <th className="text-end">Transactions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detail.paymentSummary.map((p, i) => (
+                        <tr key={i}>
+                          <td className="text-capitalize">{p.paymentMethod.replace('_', ' ')}</td>
+                          <td className="text-end">{p.totalAmount.toLocaleString('fr-FR')} DH</td>
+                          <td className="text-end">{p.transactionCount}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Debtors Summary */}
+                {detail.debtorsSummary.length > 0 && (
+                  <>
+                    <h6 className="fw-600 mb-3"><i className="bi bi-people me-2" />Débiteurs</h6>
+                    <div className="table-responsive mb-4">
+                      <table className="table table-sm table-bordered" style={{ fontSize: '0.82rem' }}>
+                        <thead>
+                          <tr className="table-light">
+                            <th>Nom</th>
+                            <th>Référence</th>
+                            <th className="text-end">Montant</th>
+                            <th className="text-end">Factures</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {detail.debtorsSummary.map((d, i) => (
+                            <tr key={i}>
+                              <td>{d.debtorName}</td>
+                              <td className="font-mono text-xs">{d.debtorReference}</td>
+                              <td className="text-end">{d.amount.toLocaleString('fr-FR')} DH</td>
+                              <td className="text-end">{d.invoiceCount}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </>
+                )}
+
+                {/* Reports with download */}
+                {reports && reports.length > 0 && (
+                  <>
+                    <h6 className="fw-600 mb-3"><i className="bi bi-file-pdf me-2" />Rapports PDF</h6>
+                    <div className="row g-2">
+                      {reports.map((report) => (
+                        <div key={report.id} className="col-md-6">
+                          <div className="d-flex align-items-center gap-2 p-2 rounded" style={{ background: 'rgba(15,23,42,0.03)' }}>
+                            <i className="bi bi-file-earmark-pdf" style={{ color: '#ef4444', fontSize: '1.1rem' }} />
+                            <div className="flex-1" style={{ fontSize: '0.8rem' }}>
+                              <div className="fw-600">{report.name}</div>
+                              {report.fileSize && (
+                                <div style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>
+                                  {(report.fileSize / 1024).toFixed(0)} Ko
+                                </div>
+                              )}
+                            </div>
+                            {(userRole === 'admin' || userRole === 'comptable') && (
+                              <button
+                                className="btn btn-sm btn-ghost p-1"
+                                onClick={() => handleDownload(report.id)}
+                                title="Télécharger"
+                              >
+                                <i className="bi bi-download" style={{ color: 'var(--accent)' }} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </>
+            ) : (
+              <div className="text-center py-4" style={{ color: 'var(--text-muted)' }}>
+                Aucune donnée disponible
+              </div>
+            )}
+          </div>
+          <div className="pms-modal-footer">
+            <button className="btn btn-ghost" onClick={closeClosureDetail}>Fermer</button>
           </div>
         </div>
       </div>
