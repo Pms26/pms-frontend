@@ -7,7 +7,16 @@ const PUBLIC_PATHS = [
   '/reset-password'
 ];
 
+const ROLE_HOME_PAGES: Record<string, string> = {
+  admin: '/dashboard',
+  manager: '/dashboard',
+  comptable: '/dashboard',
+  receptionist: '/front-office',
+  housekeeping_supervisor: '/housekeeping',
+};
+
 const ROLE_RESTRICTIONS: Record<string, string[]> = {
+  '/dashboard': ['admin', 'manager', 'comptable'],
   '/night-audit/history': ['admin', 'manager', 'comptable'],
   '/front-office': ['admin', 'manager', 'receptionist', 'comptable'],
   '/tarification': ['admin', 'manager', 'receptionist', 'comptable'],
@@ -70,9 +79,9 @@ export function middleware(request: NextRequest) {
         pathname.startsWith(restrictedPath) &&
         !allowedRoles.includes(role)
       ) {
-        return NextResponse.redirect(
-          new URL('/dashboard', request.url)
-        );
+        const homePage = ROLE_HOME_PAGES[role] || '/login';
+
+        return NextResponse.redirect(new URL(homePage, request.url));
       }
     }
   } catch {

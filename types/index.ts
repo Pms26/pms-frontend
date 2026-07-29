@@ -264,6 +264,92 @@ export interface YTDCard {
   detail: string;
 }
 
+// ─── Analytics Dashboard (nouveaux types) ──────────────
+
+export interface SegmentGroup {
+  code: string;
+  label: string;
+}
+
+export interface TrendMonth {
+  month: number;
+  totalRooms: number;
+  totalNights: number;
+  totalRevenue: number;
+  occupancyRate: number;
+  adr: number;
+  revpar: number;
+  avgStayDuration: number;
+  activeBookings: number;
+}
+
+export interface TrendResponse {
+  year: number;
+  months: TrendMonth[];
+}
+
+export interface SegmentGroupsResponse {
+  segments: SegmentGroup[];
+  groups: Record<string, string[]>;
+}
+
+export interface SegmentPieItem {
+  segment: string;
+  label: string;
+  nights: number;
+  percentage: number;
+}
+
+export interface SegmentBarItem {
+  segment: string;
+  label: string;
+  revenue: number;
+}
+
+export interface SegmentDistribution {
+  period: { year: number; month: number };
+  totalNights: number;
+  pieChart: SegmentPieItem[];
+  barChart: SegmentBarItem[];
+}
+
+export interface ComparisonMetrics {
+  totalRooms: number;
+  totalNights: number;
+  totalRevenue: number;
+  occupancyRate: number;
+  adr: number;
+  revpar: number;
+}
+
+export interface ComparisonDeltas {
+  occupancyRate: number | null;
+  adr: number | null;
+  revpar: number | null;
+  revenue: number | null;
+}
+
+export interface MonthlyComparison {
+  period: { current: { year: number; month: number }; previous: { year: number; month: number } };
+  segment: string;
+  current: ComparisonMetrics;
+  previous: ComparisonMetrics;
+  deltas: ComparisonDeltas;
+}
+
+export interface YTDComparisonItem {
+  month: number;
+  current: ComparisonMetrics;
+  previous: ComparisonMetrics;
+  deltas: ComparisonDeltas;
+}
+
+export interface YTDComparisonResponse {
+  period: { currentYear: number; prevYear: number; upToMonth: number };
+  segment: string;
+  comparison: YTDComparisonItem[];
+}
+
 // ─── Front Office ────────────────────────────────────────
 
 export interface FolioEntry {

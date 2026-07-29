@@ -6,6 +6,14 @@ import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/AuthContext';
 
+const ROLE_HOME: Record<string, string> = {
+  admin: '/dashboard',
+  manager: '/dashboard',
+  comptable: '/dashboard',
+  receptionist: '/front-office',
+  housekeeping_supervisor: '/housekeeping',
+};
+
 export default function LoginPage() {
   return (
     <Suspense fallback={<LoginSkeleton />}>
@@ -52,7 +60,9 @@ function LoginForm() {
     try {
       await login(email.trim(), password);
 
-      const redirect = searchParams.get('redirect') || '/dashboard';
+      const user = useAuthStore.getState().user;
+      const roleHome = ROLE_HOME[user?.role ?? ''] || '/dashboard';
+      const redirect = searchParams.get('redirect') || roleHome;
 
       router.push(redirect);
     } catch (requestError) {
