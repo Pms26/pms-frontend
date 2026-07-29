@@ -77,14 +77,21 @@ function SidebarNavContent({ collapsed }: { collapsed: boolean }) {
         .slice(0, 2)
     : 'U';
 
-  const isComptable = user?.role === 'comptable';
+  const role = user?.role;
+  const isComptable = role === 'comptable';
 
   const gestionItems =
-    user?.role === 'admin' ? [...GESTION_ITEMS, ...ADMIN_ITEMS] : GESTION_ITEMS;
+    role === 'admin' ? [...GESTION_ITEMS, ...ADMIN_ITEMS] : GESTION_ITEMS;
 
-  const exploitationItems = isComptable
-    ? EXPLOITATION_ITEMS.filter((item) => item.href === '/dashboard' || item.href === '/front-office/check-in')
-    : EXPLOITATION_ITEMS;
+  const exploitationItems = EXPLOITATION_ITEMS.filter((item) => {
+    if (item.href === '/dashboard') {
+      return role === 'admin' || role === 'manager' || role === 'comptable';
+    }
+    if (isComptable) {
+      return item.href === '/dashboard' || item.href === '/front-office/check-in';
+    }
+    return true;
+  });
 
   const filteredGestionItems = isComptable
     ? gestionItems.filter((item) =>

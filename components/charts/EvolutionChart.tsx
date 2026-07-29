@@ -4,7 +4,14 @@ import { useEffect, useRef } from 'react';
 import Chart from 'chart.js/auto';
 import { getTarifs } from '@/lib/api/tarification';
 
-export default function EvolutionChart() {
+interface EvolutionChartProps {
+  labels?: string[];
+  occupancyData?: number[];
+  adrData?: number[];
+  year?: number;
+}
+
+export default function EvolutionChart({ labels: propLabels, occupancyData, adrData, year }: EvolutionChartProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const chartRef = useRef<any>(null);
 
@@ -15,18 +22,23 @@ export default function EvolutionChart() {
       const canvas = canvasRef.current;
       if (!canvas) return;
 
-      // fetch data (mock for now)
-      const tarifs = await getTarifs();
+      let labels: string[];
+      let toData: number[];
+      let adrValues: number[];
 
-      // derive datasets from fetched tarifs (non hard-coded source)
-      const labels = ['Août','Sep','Oct','Nov','Déc','Jan','Fév','Mar','Avr','Mai','Juin','Juil'];
-
-      const avgBasse = Math.round((tarifs.reduce((s, t) => s + t.basse, 0) / (tarifs.length || 1)));
-      const baseTO = Math.max(50, Math.min(90, Math.round(avgBasse / 10)));
-      const baseADR = Math.round(avgBasse * 1.2);
-
-      const toData = labels.map((_, i) => Math.max(40, Math.min(100, baseTO + Math.round(Math.sin(i / 2) * 8 + (i % 3 === 0 ? 5 : 0)))));
-      const adrData = labels.map((_, i) => Math.max(200, baseADR + Math.round(Math.cos(i / 3) * 120 + (i % 2 ? 30 : -20))));
+      if (propLabels && occupancyData && adrData) {
+        labels = propLabels;
+        toData = occupancyData;
+        adrValues = adrData;
+      } else {
+        const tarifs = await getTarifs();
+        labels = ['Août','Sep','Oct','Nov','Déc','Jan','Fév','Mar','Avr','Mai','Juin','Juil'];
+        const avgBasse = Math.round((tarifs.reduce((s, t) => s + t.basse, 0) / (tarifs.length || 1)));
+        const baseTO = Math.max(50, Math.min(90, Math.round(avgBasse / 10)));
+        const baseADR = Math.round(avgBasse * 1.2);
+        toData = labels.map((_, i) => Math.max(40, Math.min(100, baseTO + Math.round(Math.sin(i / 2) * 8 + (i % 3 === 0 ? 5 : 0)))));
+        adrValues = labels.map((_, i) => Math.max(200, baseADR + Math.round(Math.cos(i / 3) * 120 + (i % 2 ? 30 : -20))));
+      }
 
       const cs = getComputedStyle(document.documentElement);
       const accent = cs.getPropertyValue('--accent').trim() || '#6366f1';
@@ -54,7 +66,7 @@ export default function EvolutionChart() {
             },
             {
               label: 'ADR (DH)',
-              data: adrData,
+              data: adrValues,
               borderColor: cyan,
               backgroundColor: cyan,
               tension: 0.3,
@@ -85,7 +97,7 @@ export default function EvolutionChart() {
         chartRef.current = null;
       }
     };
-  }, []);
+  }, [propLabels, occupancyData, adrData, year]);
 
   return <canvas ref={canvasRef} id="chartTO" style={{ width: '100%', height: 200 }} />;
 }
