@@ -97,6 +97,9 @@ function SidebarNavContent({ collapsed }: { collapsed: boolean }) {
     if (item.href === '/analytics') {
       return role === 'admin' || role === 'manager' || role === 'comptable';
     }
+    if (item.href.startsWith('/night-audit') && role === 'housekeeping_supervisor') {
+      return false;
+    }
     if (isComptable) {
       return item.href.startsWith('/night-audit') || item.href.startsWith('/tarification');
     }

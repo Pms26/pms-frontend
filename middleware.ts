@@ -17,6 +17,7 @@ const ROLE_HOME_PAGES: Record<string, string> = {
 
 const ROLE_RESTRICTIONS: Record<string, string[]> = {
   '/dashboard': ['admin', 'manager', 'comptable'],
+  '/night-audit': ['admin', 'manager', 'comptable'],
   '/night-audit/history': ['admin', 'manager', 'comptable'],
   '/front-office': ['admin', 'manager', 'receptionist', 'comptable'],
   '/tarification': ['admin', 'manager', 'receptionist', 'comptable'],
