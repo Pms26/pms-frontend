@@ -244,26 +244,6 @@ export interface KPI {
   gradientCss?: string; // inline CSS gradient string (ex: 'linear-gradient(135deg,#6366f1,#8b5cf6)')
 }
 
-export interface SegmentAnalytics {
-  segment: string;
-  nuitees2026: number;
-  nuitees2025: number;
-  deltaNuitees: string;
-  ca2026: string;
-  ca2025: string;
-  deltaCa: string;
-  adr2026: string;
-  adr2025: string;
-  deltaAdr: string;
-}
-
-export interface YTDCard {
-  label: string;
-  value: string;
-  barWidth: string;
-  detail: string;
-}
-
 // ─── Analytics Dashboard (nouveaux types) ──────────────
 
 export interface SegmentGroup {
@@ -348,6 +328,24 @@ export interface YTDComparisonResponse {
   period: { currentYear: number; prevYear: number; upToMonth: number };
   segment: string;
   comparison: YTDComparisonItem[];
+}
+
+export interface SegmentTrendMonthItem {
+  segment: string;
+  label: string;
+  nights: number;
+  revenue: number;
+  adr: number;
+}
+
+export interface SegmentTrendMonth {
+  month: number;
+  segments: SegmentTrendMonthItem[];
+}
+
+export interface SegmentTrendResponse {
+  year: number;
+  months: SegmentTrendMonth[];
 }
 
 // ─── Front Office ────────────────────────────────────────

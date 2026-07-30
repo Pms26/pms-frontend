@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { getKPIs, getDashboardTrend, getSegmentGroups, getSegmentDistribution, getComparisonYTD, getComparisonMonthly, getTodayArrivals, getTodayDepartures, SEGMENT_GROUP_COLORS, mapSegmentToGroup, formatDelta } from '@/lib/api/analytics';
+import { getKPIs, getDashboardTrend, getSegmentGroups, getSegmentDistribution, getComparisonYTD, getComparisonMonthly, SEGMENT_GROUP_COLORS, mapSegmentToGroup, formatDelta } from '@/lib/api/analytics';
 import KPICard from '@/components/ui/KPICard';
 import type { KPI } from '@/types';
 
@@ -29,16 +29,6 @@ export default function DashboardPage() {
   const { data: kpis, isLoading: kpisLoading } = useQuery({
     queryKey: ['kpis'],
     queryFn: getKPIs,
-  });
-
-  const { data: arrivals } = useQuery({
-    queryKey: ['today-arrivals'],
-    queryFn: getTodayArrivals,
-  });
-
-  const { data: departures } = useQuery({
-    queryKey: ['today-departures'],
-    queryFn: getTodayDepartures,
   });
 
   const { data: trend, isLoading: trendLoading } = useQuery({
@@ -359,63 +349,7 @@ export default function DashboardPage() {
         )}
       </div>
 
-      {/* ── Quick Overview ── */}
-      <div className="row g-3">
-        {/* Arrivées du jour */}
-        <div className="col-lg-4">
-          <div className="glass-card p-4">
-            <h6 className="chart-title mb-3">
-              <i className="bi bi-door-open me-2 text-accent" />Arrivées du jour
-              <span className="badge bg-warning text-dark ms-2" style={{ fontSize: '0.65rem' }}>Démo</span>
-            </h6>
-            {arrivals?.map((a, i) => (
-              <div key={i} className="quick-item">
-                <div
-                  className="quick-avatar"
-                  style={{ background: AVATAR_COLORS[i % AVATAR_COLORS.length] }}
-                >
-                  {getInitials(a.client)}
-                </div>
-                <div className="flex-1">
-                  <div className="quick-name">{a.client}</div>
-                  <div className="quick-room">Ch. {a.room} · {a.type}</div>
-                </div>
-                <span className="quick-time">{a.time}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Départs du jour */}
-        <div className="col-lg-4">
-          <div className="glass-card p-4">
-            <h6 className="chart-title mb-3">
-              <i className="bi bi-door-closed me-2" style={{ color: '#f59e0b' }} />Départs du jour
-              <span className="badge bg-warning text-dark ms-2" style={{ fontSize: '0.65rem' }}>Démo</span>
-            </h6>
-            {departures?.map((d, i) => (
-              <div key={i} className="quick-item">
-                <div
-                  className="quick-avatar"
-                  style={{ background: AVATAR_COLORS[(i + 2) % AVATAR_COLORS.length] }}
-                >
-                  {getInitials(d.client)}
-                </div>
-                <div className="flex-1">
-                  <div className="quick-name">{d.client}</div>
-                  <div className="quick-room">Ch. {d.room}</div>
-                </div>
-                <span
-                  className="quick-time"
-                  style={{ color: d.status === 'soldé' ? 'var(--green)' : 'var(--amber)' }}
-                >
-                  {d.balance}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      
     </div>
   );
 }

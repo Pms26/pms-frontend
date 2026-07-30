@@ -20,6 +20,7 @@ const ROLE_RESTRICTIONS: Record<string, string[]> = {
   '/night-audit/history': ['admin', 'manager', 'comptable'],
   '/front-office': ['admin', 'manager', 'receptionist', 'comptable'],
   '/tarification': ['admin', 'manager', 'receptionist', 'comptable'],
+  '/analytics': ['admin', 'manager', 'comptable'],
   '/users': ['admin'],
   '/register': ['admin'],
   '/planning': ['admin', 'manager', 'receptionist'],
