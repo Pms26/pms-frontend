@@ -2,46 +2,66 @@
 
 // ═══════════════════════════════════════════════════════════
 // OASIS PMS — Night Audit (Module 3)
-// Reproduction exacte : night-audit-warning, na-icon, na-check-*,
-// na-report-item, btn-danger-pms
 // ═══════════════════════════════════════════════════════════
 
 import { useState } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import Link from 'next/link';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useModalToast } from '@/components/context/ModalToastContext';
-import { getNightAuditStatus, getNightAuditReports, closeNightAudit } from '@/lib/api/nightAudit';
+import { ClosureConfirmModal } from '@/components/layout/GlobalModals';
+import {
+  getNightAuditStatus,
+  checkBalance,
+  closeDay,
+  getNightAuditReports,
+} from '@/lib/api/nightAudit';
 import { useAuthStore } from '@/lib/auth/AuthContext';
+import type { NightAuditReport } from '@/types';
 
 export default function NightAuditPage() {
   const user = useAuthStore((s) => s.user);
-  const isComptable = user?.role === 'comptable';
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const role = user?.role;
+  const isComptable = role === 'comptable';
+  const isReceptionist = role === 'receptionist';
+  const isAdmin = role === 'admin';
+  const queryClient = useQueryClient();
+  const { openClosureConfirm, closeClosureConfirm, showToast } = useModalToast();
 
-  const { data: status, isLoading } = useQuery({
+  // ── Status query (US1) ──
+  const { data: status, isLoading: statusLoading } = useQuery({
     queryKey: ['night-audit-status'],
     queryFn: getNightAuditStatus,
   });
 
-  const { data: reports } = useQuery({
-    queryKey: ['night-audit-reports'],
-    queryFn: getNightAuditReports,
+  // ── Check-balance mutation (US2) ──
+  const [hasCheckedBalance, setHasCheckedBalance] = useState(false);
+  const checkBalanceMutation = useMutation({
+    mutationFn: () => checkBalance(status?.businessDate || ''),
+    onSuccess: () => setHasCheckedBalance(true),
   });
 
-  const [adminPassword, setAdminPassword] = useState('');
-  const [validationError, setValidationError] = useState('');
+  // ── Reports query (for after closure) ──
+  const { data: reports } = useQuery<NightAuditReport[]>({
+    queryKey: ['night-audit-reports', status?.businessDate],
+    queryFn: () => getNightAuditReports(status?.businessDate || ''),
+    enabled: !!status?.businessDate,
+  });
 
-  const { showToast } = useModalToast();
-
+  // ── Close mutation (US3) ──
   const closeMutation = useMutation({
-    mutationFn: () => closeNightAudit(),
-    onSuccess: () => {
-      setConfirmOpen(false);
-      setAdminPassword('');
-      setValidationError('');
-      showToast('✅ Clôture effectuée avec succès !');
+    mutationFn: (justification?: string) =>
+      closeDay(status?.businessDate || '', justification),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['night-audit-status'] });
+      queryClient.invalidateQueries({ queryKey: ['night-audit-reports'] });
+      closeClosureConfirm();
+      const msg = data.warnings && data.warnings.length > 0
+        ? `Clôture effectuée avec ${data.warnings.length} avertissement(s)`
+        : 'Clôture effectuée avec succès';
+      showToast(`✅ ${msg}`);
     },
-    onError: () => {
-      showToast('⚠️ Une erreur est survenue lors de la clôture.');
+    onError: (error: Error) => {
+      showToast(`⚠️ ${error.message}`);
     },
   });
 
@@ -56,10 +76,64 @@ export default function NightAuditPage() {
             Journée : <strong>{status.businessDate}</strong>
           </span>
         )}
+        {(isAdmin || isComptable) && (
+          <Link href="/night-audit/history" className="btn btn-outline-accent btn-sm ms-auto">
+            <i className="bi bi-clock-history me-1" />
+            Historique
+          </Link>
+        )}
       </div>
 
-      {/* ── Warning Banner ── */}
-      {!isComptable && (
+      {/* ── Status Section (US1) ── */}
+      {statusLoading ? (
+        <div className="glass-card p-4 mb-4">
+          <div className="skeleton h-6 rounded mb-2" style={{ width: '40%' }} />
+          <div className="skeleton h-4 rounded" style={{ width: '60%' }} />
+        </div>
+      ) : status ? (
+        <div className="glass-card p-4 mb-4">
+          <div className="d-flex align-items-center gap-3 mb-3">
+            <div
+              className="na-status-badge"
+              style={{
+                padding: '4px 12px',
+                borderRadius: '20px',
+                fontSize: '0.82rem',
+                fontWeight: 600,
+                background: status.isOpen ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)',
+                color: status.isOpen ? '#10b981' : '#ef4444',
+              }}
+            >
+              <i className={`bi bi-${status.isOpen ? 'check-circle-fill' : 'exclamation-circle-fill'} me-1`} />
+              {status.isOpen ? 'En cours' : 'Échoué'}
+            </div>
+            {status.errorDetails && (
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                Service: {status.errorDetails.service} — Code: {status.errorDetails.code}
+              </span>
+            )}
+          </div>
+          {status.lastClosure && (
+            <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+              <i className="bi bi-clock-history me-1" />
+              Dernière clôture : <strong>{status.lastClosure.businessDate}</strong>
+              {' — '}
+              {new Date(status.lastClosure.closedAt).toLocaleString('fr-FR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+              })}
+              {' par '}
+              <span className="text-capitalize">{status.lastClosure.closedByRole}</span>
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      {/* ── Warning Banner (US4 — hidden for comptable & receptionist) ── */}
+      {!isComptable && !isReceptionist && (
         <div className="night-audit-warning glass-card p-4 mb-4">
           <div className="d-flex align-items-center gap-3">
             <div className="na-icon">
@@ -76,167 +150,160 @@ export default function NightAuditPage() {
         </div>
       )}
 
-      {/* ── Pre-audit checks ── */}
-      <div className="row g-3 mb-4">
-        {isLoading
-          ? Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="col-md-6 col-lg-4">
-                <div className="glass-card p-3" style={{ minHeight: 90 }}>
-                  <div style={{ width: '70%', height: 14, background: 'rgba(15,23,42,0.06)', borderRadius: 4, marginBottom: 8 }} />
-                  <div style={{ width: '90%', height: 10, background: 'rgba(15,23,42,0.04)', borderRadius: 4 }} />
-                </div>
-              </div>
-            ))
-          : status?.checks.map((check) => (
-              <div key={check.id} className="col-md-6 col-lg-4">
-                <div className="glass-card p-3">
-                  <div className="d-flex align-items-center gap-3">
-                    {/* Status icon */}
-                    <div className="na-check-icon">
-                      <i
-                        className={`bi bi-${
-                          check.status === 'ok'
-                            ? 'check-circle-fill'
-                            : check.status === 'warning'
-                            ? 'exclamation-triangle-fill'
-                            : 'x-circle-fill'
-                        } ${
-                          check.status === 'ok' ? 'success' : check.status === 'warning' ? 'warning' : ''
-                        }`}
-                        style={{
-                          color:
-                            check.status === 'ok'
-                              ? 'var(--green)'
-                              : check.status === 'warning'
-                              ? 'var(--amber)'
-                              : 'var(--rose)',
-                        }}
-                      />
-                    </div>
-                    <div className="flex-1">
-                      <div className="na-check-label">{check.label}</div>
-                      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: 2 }}>
-                        {check.description}
-                      </div>
-                    </div>
-                    <div
-                      className="na-check-value"
-                      style={{
-                        color:
-                          check.status === 'ok'
-                            ? 'var(--green)'
-                            : check.status === 'warning'
-                            ? 'var(--amber)'
-                            : 'var(--rose)',
-                      }}
-                    >
-                      {check.status === 'ok' ? 'OK' : check.status === 'warning' ? '⚠' : '✗'}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-      </div>
-
-      {/* ── Reports ── */}
+      {/* ── Check-Balance Section (US2 — hidden for receptionist) ── */}
+      {!isReceptionist && (
       <div className="glass-card p-4 mb-4">
-        <h6 className="fw-600 mb-3">Rapports générés automatiquement à la clôture</h6>
-        <div className="row g-2">
-          {reports?.map((report, i) => (
-            <div key={i} className="col-md-6 col-lg-4">
-              <div className="na-report-item">
-                <i className={`bi bi-${report.icon}`} style={{ color: report.color }} />
-                <span style={{ fontSize: '0.82rem', flex: 1 }}>{report.label}</span>
-                <i className="bi bi-download" style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }} />
+        <h6 className="fw-600 mb-3">Vérification de l&apos;équilibre</h6>
+        <button
+          className="btn btn-outline-accent mb-3"
+          onClick={() => {
+            checkBalanceMutation.mutate();
+          }}
+          disabled={checkBalanceMutation.isPending || !status?.isOpen}
+        >
+          {checkBalanceMutation.isPending ? (
+            <><span className="spinner-border spinner-border-sm me-2" />Vérification...</>
+          ) : (
+            <><i className="bi bi-balance me-2" />Vérifier l&apos;équilibre</>
+          )}
+        </button>
+
+        {checkBalanceMutation.isError && (
+          <div className="alert alert-danger" style={{ fontSize: '0.85rem' }}>
+            <i className="bi bi-exclamation-triangle me-2" />
+            {checkBalanceMutation.error.message}
+          </div>
+        )}
+
+        {checkBalanceMutation.data && (
+          <div className="mt-3">
+            <div className="d-flex align-items-center gap-4 mb-3" style={{ fontSize: '0.9rem' }}>
+              <div>
+                <span style={{ color: 'var(--text-muted)' }}>Total Débit : </span>
+                <strong>{checkBalanceMutation.data.totalDebit.toLocaleString('fr-FR')} DH</strong>
+              </div>
+              <div>
+                <span style={{ color: 'var(--text-muted)' }}>Total Crédit : </span>
+                <strong>{checkBalanceMutation.data.totalCredit.toLocaleString('fr-FR')} DH</strong>
+              </div>
+              <div>
+                <span
+                  className="d-inline-flex align-items-center gap-1 px-2 py-1 rounded"
+                  style={{
+                    fontSize: '0.82rem',
+                    fontWeight: 600,
+                    background: checkBalanceMutation.data.ecart === 0
+                      ? 'rgba(16,185,129,0.1)'
+                      : 'rgba(245,158,11,0.1)',
+                    color: checkBalanceMutation.data.ecart === 0 ? '#10b981' : '#f59e0b',
+                  }}
+                >
+                  <i className={`bi bi-${checkBalanceMutation.data.ecart === 0 ? 'check-circle' : 'exclamation-triangle'}`} />
+                  {checkBalanceMutation.data.ecart === 0 ? 'Équilibré' : `Écart: ${checkBalanceMutation.data.ecart.toLocaleString('fr-FR')} DH`}
+                </span>
               </div>
             </div>
-          ))}
-        </div>
-      </div>
 
-      {/* ── Close Button ── */}
-      {!isComptable && (
+            {/* Decomposition */}
+            <div className="row g-3">
+              <div className="col-md-6">
+                <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>
+                  <i className="bi bi-arrow-down-circle me-1" />Sources Débit
+                </div>
+                {Object.entries(checkBalanceMutation.data.decomposition.debitSources).map(([source, amount]) => (
+                  <div key={source} className="d-flex justify-content-between" style={{ fontSize: '0.82rem', padding: '4px 0', borderBottom: '1px solid rgba(15,23,42,0.06)' }}>
+                    <span className="text-capitalize">{source}</span>
+                    <strong>{amount.toLocaleString('fr-FR')} DH</strong>
+                  </div>
+                ))}
+              </div>
+              <div className="col-md-6">
+                <div style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6 }}>
+                  <i className="bi bi-arrow-up-circle me-1" />Sources Crédit
+                </div>
+                {Object.entries(checkBalanceMutation.data.decomposition.creditSources).map(([source, amount]) => (
+                  <div key={source} className="d-flex justify-content-between" style={{ fontSize: '0.82rem', padding: '4px 0', borderBottom: '1px solid rgba(15,23,42,0.06)' }}>
+                    <span className="text-capitalize">{source}</span>
+                    <strong>{amount.toLocaleString('fr-FR')} DH</strong>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+      )}
+
+      {/* ── Reports (after closure) ── */}
+      {reports && reports.length > 0 && (
+        <div className="glass-card p-4 mb-4">
+          <h6 className="fw-600 mb-3">Rapports générés automatiquement à la clôture</h6>
+          <div className="row g-2">
+            {reports.map((report) => {
+              const iconMap: Record<string, string> = {
+                revenue_daily: 'cash-stack',
+                receipts_daily: 'receipt',
+                debtors: 'people',
+                departures: 'box-arrow-right',
+                arrivals: 'box-arrow-in-right',
+                occupancy_forecast: 'calendar-event',
+              };
+              const colorMap: Record<string, string> = {
+                revenue_daily: '#10b981',
+                receipts_daily: '#3b82f6',
+                debtors: '#f59e0b',
+                departures: '#ef4444',
+                arrivals: '#06b6d4',
+                occupancy_forecast: '#6366f1',
+              };
+              return (
+                <div key={report.id} className="col-md-6 col-lg-4">
+                  <div className="na-report-item">
+                    <i
+                      className={`bi bi-${iconMap[report.type] || 'file-earmark'}`}
+                      style={{ color: colorMap[report.type] || '#6b7280' }}
+                    />
+                    <span style={{ fontSize: '0.82rem', flex: 1 }}>{report.name}</span>
+                    {isAdmin && report.downloadUrl && (
+                      <a
+                        href={report.downloadUrl}
+                        className="btn btn-sm btn-ghost p-1"
+                        download
+                        title="Télécharger"
+                      >
+                        <i className="bi bi-download" style={{ color: 'var(--text-dim)', fontSize: '0.85rem' }} />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Close Button (US3 + US4 — hidden for comptable & receptionist, gated by check-balance) ── */}
+      {!isComptable && !isReceptionist && (
         <button
           className="btn btn-danger-pms btn-lg w-100"
-          onClick={() => setConfirmOpen(true)}
-          disabled={closeMutation.isPending}
+          onClick={() => openClosureConfirm()}
+          disabled={!hasCheckedBalance || !status?.isOpen || closeMutation.isPending}
+          style={{
+            opacity: !hasCheckedBalance || !status?.isOpen ? 0.5 : 1,
+            cursor: !hasCheckedBalance || !status?.isOpen ? 'not-allowed' : 'pointer',
+          }}
         >
           <i className="bi bi-moon-stars-fill me-2" />
           Lancer la Clôture de Journée (J → J+1)
         </button>
       )}
 
-      {/* ── Confirmation Modal ── */}
-      {confirmOpen && !isComptable && (
-        <div
-          className="modal fade show d-block"
-          style={{ background: 'rgba(15,23,42,0.5)' }}
-          tabIndex={-1}
-        >
-          <div className="modal-dialog modal-dialog-centered">
-            <div className="modal-content pms-modal">
-              <div className="pms-modal-header">
-                <h5 className="modal-title">Confirmer la Clôture</h5>
-              </div>
-              <div className="modal-body p-4 text-center">
-                <div className="na-modal-icon mb-3">
-                  <i className="bi bi-moon-stars-fill" />
-                </div>
-                <h5 className="fw-700 mb-2">Journée {status?.businessDate}</h5>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-                  Êtes-vous certain de vouloir clôturer la journée ? Cette opération est <strong>irréversible</strong>.
-                </p>
-                <div className="mb-3 text-start">
-                  <label className="form-label fw-600" htmlFor="adminPassword">
-                    Mot de passe administrateur
-                  </label>
-                  <input
-                    id="adminPassword"
-                    type="password"
-                    className="form-control pms-input"
-                    placeholder="Mot de passe administrateur"
-                    value={adminPassword}
-                    onChange={(e) => {
-                      setAdminPassword(e.target.value);
-                      if (e.target.value.trim()) setValidationError('');
-                    }}
-                  />
-                  {validationError ? (
-                    <div className="text-danger mt-2" style={{ fontSize: '0.85rem' }}>
-                      {validationError}
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-              <div className="pms-modal-footer">
-                <button className="btn btn-ghost" onClick={() => {
-                  setConfirmOpen(false);
-                  setValidationError('');
-                  setAdminPassword('');
-                }}>
-                  Annuler
-                </button>
-                <button
-                  className="btn btn-danger-pms"
-                  onClick={() => {
-                    if (!adminPassword.trim()) {
-                      setValidationError('Le mot de passe administrateur est requis.');
-                      return;
-                    }
-                    closeMutation.mutate();
-                  }}
-                  disabled={closeMutation.isPending || !adminPassword.trim()}
-                >                  {closeMutation.isPending ? (
-                    <><span className="spinner-border spinner-border-sm me-2" />Clôture en cours...</>
-                  ) : (
-                    <><i className="bi bi-check-lg me-1" />Confirmer la clôture</>
-                  )}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ── Closure Confirm Modal (US3 — GlobalModals pattern) ── */}
+      <ClosureConfirmModal
+        onConfirm={(justification) => closeMutation.mutate(justification)}
+        isPending={closeMutation.isPending}
+        businessDate={status?.businessDate || ''}
+      />
     </div>
   );
 }

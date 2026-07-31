@@ -150,34 +150,86 @@ export interface FiscaliteItem {
 
 export interface NightAuditStatus {
   businessDate: string;
+  status: 'en_cours' | 'echouee';
   isOpen: boolean;
-  lastClosedDate: string | null;
-  checks: NightAuditCheck[];
+  lastClosure: {
+    businessDate: string;
+    closedAt: string;
+    closedByRole: string;
+  } | null;
+  errorDetails: {
+    service: string;
+    code: string;
+  } | null;
 }
 
-export interface NightAuditCheck {
-  id: string;
-  label: string;
-  description: string;
-  status: 'ok' | 'warning' | 'error';
-  icon: string;
-  color: string;
-}
-
-export interface NightAuditReport {
-  icon: string;
-  label: string;
-  color: string;
+export interface CheckBalanceResponse {
+  businessDate: string;
+  equilibre: boolean;
+  totalDebit: number;
+  totalCredit: number;
+  ecart: number;
+  decomposition: {
+    debitSources: Record<string, number>;
+    creditSources: Record<string, number>;
+  };
 }
 
 export interface Closure {
-  id: string;
   businessDate: string;
+  status: 'cloturee' | 'echouee';
+  closedByRole: string;
   closedAt: string;
-  closedBy: string;
+  totalDebit: number | null;
+  totalCredit: number | null;
+  ecart: number | null;
+  reportsGenerated: number;
   justification?: string;
-  revenue: number;
-  occupancyRate: number;
+  warnings?: Array<{
+    report: string;
+    reason: string;
+  }>;
+  errorDetails?: {
+    code: string;
+  };
+}
+
+export interface RevenueBreakdown {
+  category: 'lodging' | 'fb' | 'extras' | 'tourism_tax';
+  amountHt: number;
+  tvaRate: number;
+  tvaAmount: number;
+  amountTtc: number;
+}
+
+export interface PaymentSummary {
+  paymentMethod: 'cash' | 'card' | 'wire_transfer';
+  totalAmount: number;
+  transactionCount: number;
+}
+
+export interface DebtorSummary {
+  debtorName: string;
+  debtorReference: string;
+  amount: number;
+  invoiceCount: number;
+}
+
+export interface ClosureDetail {
+  closure: Closure;
+  revenueBreakdown: RevenueBreakdown[];
+  paymentSummary: PaymentSummary[];
+  debtorsSummary: DebtorSummary[];
+}
+
+export interface NightAuditReport {
+  id: string;
+  type: string;
+  name: string;
+  fileSize?: number;
+  checksum?: string;
+  generatedAt?: string;
+  downloadUrl?: string;
 }
 
 // ─── Analytics / KPIs ────────────────────────────────────
@@ -193,24 +245,108 @@ export interface KPI {
   gradientCss?: string; // inline CSS gradient string (ex: 'linear-gradient(135deg,#6366f1,#8b5cf6)')
 }
 
-export interface SegmentAnalytics {
-  segment: string;
-  nuitees2026: number;
-  nuitees2025: number;
-  deltaNuitees: string;
-  ca2026: string;
-  ca2025: string;
-  deltaCa: string;
-  adr2026: string;
-  adr2025: string;
-  deltaAdr: string;
+// ─── Analytics Dashboard (nouveaux types) ──────────────
+
+export interface SegmentGroup {
+  code: string;
+  label: string;
 }
 
-export interface YTDCard {
+export interface TrendMonth {
+  month: number;
+  totalRooms: number;
+  totalNights: number;
+  totalRevenue: number;
+  occupancyRate: number;
+  adr: number;
+  revpar: number;
+  avgStayDuration: number;
+  activeBookings: number;
+}
+
+export interface TrendResponse {
+  year: number;
+  months: TrendMonth[];
+}
+
+export interface SegmentGroupsResponse {
+  segments: SegmentGroup[];
+  groups: Record<string, string[]>;
+}
+
+export interface SegmentPieItem {
+  segment: string;
   label: string;
-  value: string;
-  barWidth: string;
-  detail: string;
+  nights: number;
+  percentage: number;
+}
+
+export interface SegmentBarItem {
+  segment: string;
+  label: string;
+  revenue: number;
+}
+
+export interface SegmentDistribution {
+  period: { year: number; month: number };
+  totalNights: number;
+  pieChart: SegmentPieItem[];
+  barChart: SegmentBarItem[];
+}
+
+export interface ComparisonMetrics {
+  totalRooms: number;
+  totalNights: number;
+  totalRevenue: number;
+  occupancyRate: number;
+  adr: number;
+  revpar: number;
+}
+
+export interface ComparisonDeltas {
+  occupancyRate: number | null;
+  adr: number | null;
+  revpar: number | null;
+  revenue: number | null;
+}
+
+export interface MonthlyComparison {
+  period: { current: { year: number; month: number }; previous: { year: number; month: number } };
+  segment: string;
+  current: ComparisonMetrics;
+  previous: ComparisonMetrics;
+  deltas: ComparisonDeltas;
+}
+
+export interface YTDComparisonItem {
+  month: number;
+  current: ComparisonMetrics;
+  previous: ComparisonMetrics;
+  deltas: ComparisonDeltas;
+}
+
+export interface YTDComparisonResponse {
+  period: { currentYear: number; prevYear: number; upToMonth: number };
+  segment: string;
+  comparison: YTDComparisonItem[];
+}
+
+export interface SegmentTrendMonthItem {
+  segment: string;
+  label: string;
+  nights: number;
+  revenue: number;
+  adr: number;
+}
+
+export interface SegmentTrendMonth {
+  month: number;
+  segments: SegmentTrendMonthItem[];
+}
+
+export interface SegmentTrendResponse {
+  year: number;
+  months: SegmentTrendMonth[];
 }
 
 // ─── Front Office ────────────────────────────────────────
