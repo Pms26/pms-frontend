@@ -83,12 +83,16 @@ function SidebarNavContent({ collapsed }: { collapsed: boolean }) {
   const gestionItems =
     role === 'admin' ? [...GESTION_ITEMS, ...ADMIN_ITEMS] : GESTION_ITEMS;
 
-  const exploitationItems = EXPLOITATION_ITEMS.filter((item) => {
+  const exploitationItems = EXPLOITATION_ITEMS.map((item) =>
+    item.href === '/front-office/check-in' && isComptable
+      ? { ...item, href: '/front-office/payments' }
+      : item,
+  ).filter((item) => {
     if (item.href === '/dashboard') {
       return role === 'admin' || role === 'manager' || role === 'comptable';
     }
     if (isComptable) {
-      return item.href === '/dashboard' || item.href === '/front-office/check-in';
+      return item.href === '/dashboard' || item.href === '/front-office/payments';
     }
     return true;
   });

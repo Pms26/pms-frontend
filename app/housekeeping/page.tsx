@@ -8,29 +8,36 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getRooms } from '@/lib/api/housekeeping';
-import type { RoomStatus } from '@/types';
+import type { HousekeepingStatus } from '@/types';
 import { useModalToast } from '@/components/context/ModalToastContext';
 
-const HK_STATUS: Record<RoomStatus, { label: string; icon: string; badgeClass: string }> = {
-  sale:      { label: 'Sale',      icon: 'bi-exclamation-circle', badgeClass: 'hk-badge hk-sale' },
-  encours:   { label: 'En cours',  icon: 'bi-arrow-repeat',       badgeClass: 'hk-badge hk-encours' },
-  propre:    { label: 'Propre',    icon: 'bi-check-circle',       badgeClass: 'hk-badge hk-propre' },
-  controlee: { label: 'Contrôlée', icon: 'bi-shield-check',       badgeClass: 'hk-badge hk-controlee' },
-  bloquee:   { label: 'Bloquée',   icon: 'bi-x-octagon',         badgeClass: 'hk-badge hk-bloquee' },
-  inhouse:   { label: 'In-House',  icon: 'bi-person',             badgeClass: 'hk-badge hk-controlee' },
+const HK_STATUS: Record<HousekeepingStatus, { label: string; icon: string; badgeClass: string }> = {
+  sale:               { label: 'Sale',               icon: 'bi-exclamation-circle', badgeClass: 'hk-badge hk-sale' },
+  nettoyage_en_cours: { label: 'En cours',           icon: 'bi-arrow-repeat',       badgeClass: 'hk-badge hk-encours' },
+  propre:             { label: 'Propre',             icon: 'bi-check-circle',       badgeClass: 'hk-badge hk-propre' },
+  controlee:          { label: 'Contrôlée',          icon: 'bi-shield-check',       badgeClass: 'hk-badge hk-controlee' },
+  bloquee:            { label: 'Bloquée',            icon: 'bi-x-octagon',          badgeClass: 'hk-badge hk-bloquee' },
 };
 
-const ROOM_ICON: Record<RoomStatus, string> = {
-  sale:      'bi-exclamation-triangle',
-  encours:   'bi-arrow-repeat',
-  propre:    'bi-check2-circle',
-  controlee: 'bi-patch-check',
-  bloquee:   'bi-lock',
-  inhouse:   'bi-person-check',
+const ROOM_ICON: Record<HousekeepingStatus, string> = {
+  sale:               'bi-exclamation-triangle',
+  nettoyage_en_cours: 'bi-arrow-repeat',
+  propre:             'bi-check2-circle',
+  controlee:          'bi-patch-check',
+  bloquee:            'bi-lock',
+};
+
+const ROOM_TYPE_LABELS: Record<string, string> = {
+  standard: 'Standard',
+  superior: 'Supérieure',
+  suite: 'Suite',
+  suite_deluxe: 'Suite Deluxe',
+  lodge: 'Lodge',
+  villa: 'Villa',
 };
 
 export default function HousekeepingPage() {
-  const [filter, setFilter] = useState<RoomStatus | ''>('');
+  const [filter, setFilter] = useState<HousekeepingStatus | ''>('');
   const { openRoom } = useModalToast();
 
   const { data: rooms, isLoading } = useQuery({
@@ -47,11 +54,11 @@ export default function HousekeepingPage() {
           className="form-select form-select-sm pms-input"
           style={{ width: 'auto' }}
           value={filter}
-          onChange={(e) => setFilter(e.target.value as RoomStatus | '')}
+          onChange={(e) => setFilter(e.target.value as HousekeepingStatus | '')}
         >
           <option value="">Tous statuts</option>
           <option value="sale">Sale</option>
-          <option value="encours">En cours</option>
+          <option value="nettoyage_en_cours">En cours</option>
           <option value="propre">Propre</option>
           <option value="controlee">Contrôlée</option>
           <option value="bloquee">Bloquée</option>
@@ -81,26 +88,26 @@ export default function HousekeepingPage() {
       ) : (
         <div className="rooms-grid">
           {rooms?.map((room) => {
-            const cfg = HK_STATUS[room.status] || HK_STATUS.propre;
-            const iconClass = ROOM_ICON[room.status] || 'bi-question';
+            const cfg = HK_STATUS[room.housekeepingStatus] || HK_STATUS.propre;
+            const iconClass = ROOM_ICON[room.housekeepingStatus] || 'bi-question';
             return (
               <div
                 key={room.id}
-                className={`room-card ${room.status}`}
-                onClick={() => openRoom(room.id, room.status, room.reason)}
+                className={`room-card ${room.housekeepingStatus}`}
+                onClick={() => openRoom(room.id, room.housekeepingStatus, room.blockReason ?? undefined)}
                 title="Cliquer pour ouvrir la modale de statut"
               >
                 <div className="room-icon">
                   <i className={`bi ${iconClass}`} />
                 </div>
-                <div className="room-number">{room.id}</div>
-                <div className="room-type">{room.type}</div>
+                <div className="room-number">{room.roomNumber}</div>
+                <div className="room-type">{ROOM_TYPE_LABELS[room.category] || room.category}</div>
                 <span className={cfg.badgeClass} style={{ fontSize: '0.68rem', marginTop: '0.5rem', display: 'inline-flex' }}>
                   {cfg.label}
                 </span>
-                {room.reason && (
+                {room.blockReason && (
                   <div style={{ fontSize: '0.68rem', color: 'var(--text-dim)', marginTop: 4, fontStyle: 'italic' }}>
-                    {room.reason}
+                    {room.blockReason}
                   </div>
                 )}
               </div>

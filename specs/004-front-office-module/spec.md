@@ -12,7 +12,7 @@
 
 ### Session 2026-07-31
 
-- **Q1**: Où placer la section "Paiements et Factures du Jour" (US6, FR-030/031/032) ? → **A**: Option A — Troisième onglet dans FrontOfficeTabs, route `/front-office/payments`, avec deux sous-sections (paiements du jour et factures du jour). Accessible à tous les rôles authentifiés (admin, manager, receptionist, housekeeping_supervisor, comptable). Cette route a un périmètre d'accès plus large que les onglets check-in et check-out (restreints selon la matrice de rôles).
+- **Q1**: Où placer la section "Paiements et Factures du Jour" (US6, FR-030/031/032) ? → **A**: Option A — Troisième onglet dans FrontOfficeTabs, route `/front-office/payments`, avec trois sous-sections (paiements du jour, factures du jour, et consultation de folio en lecture seule — FR-037). Accessible à tous les rôles authentifiés (admin, manager, receptionist, housekeeping_supervisor, comptable). Cette route a un périmètre d'accès plus large que les onglets check-in et check-out (restreints selon la matrice de rôles). La sous-section "Consultation de folio" est le moyen concret pour le comptable d'exercer son droit GET sur les folios (FR-033).
 - **Q2**: La spec restreint housekeeping_supervisor de l'accès aux pages de check-in/check-out/folios (US1, US7) alors que les endpoints GET correspondants dans le backend n'ont pas de restriction de rôle (front-office.md §2.3, §2.4, lignes "(sans role)" de la matrice). → **A**: Confirmé — c'est un choix de restriction UI volontaire et plus strict que ce que l'API backend autorise. Voir Assumptions.
 
 ## User Scenarios & Testing
@@ -109,20 +109,24 @@ En tant que **réceptionniste, admin ou manager**, je veux consulter l'extrait d
 
 ---
 
-### User Story 6 — Consulter les paiements et factures du jour (Priority: P3)
+### User Story 6 — Consulter les paiements, factures du jour et folios en lecture seule (Priority: P3)
 
-En tant que **comptable, admin, manager, réceptionniste ou gouvernante**, je veux voir la liste des paiements enregistrés aujourd'hui et la liste des folios clôturés/factures du jour, afin d'avoir une vue d'ensemble de l'activité financière quotidienne.
+En tant que **comptable, admin, manager, réceptionniste ou gouvernante**, je veux voir la liste des paiements enregistrés aujourd'hui, la liste des folios clôturés/factures du jour, et consulter un folio précis en lecture seule, afin d'avoir une vue d'ensemble de l'activité financière quotidienne.
 
-**Why this priority**: Fonctionnalité de consultation transverse, utile pour le suivi quotidien mais non bloquante pour les opérations de Front Office.
+**Why this priority**: Fonctionnalité de consultation transverse, utile pour le suivi quotidien mais non bloquante pour les opérations de Front Office. La sous-section de consultation de folio en lecture seule est le **seul moyen pour le rôle comptable d'exercer son droit GET sur les folios** (FR-033), les onglets check-in et check-out lui étant bloqués par le middleware — sans elle, ce droit ne serait pas exerçable dans l'UI.
 
-**Independent Test**: L'utilisateur navigue vers l'onglet "Paiements" de FrontOfficeTabs (route `/front-office/payments`) et voit deux sous-sections : la liste des paiements du jour et la liste des factures du jour, avec leurs montants et détails.
+**Independent Test**: L'utilisateur navigue vers l'onglet "Paiements" de FrontOfficeTabs (route `/front-office/payments`) et voit trois sous-sections : la liste des paiements du jour, la liste des factures du jour, et la consultation de folio en lecture seule (recherche par bookingId ou folioId).
 
 **Acceptance Scenarios**:
 
-1. **Given** l'utilisateur est connecté (admin, manager, receptionist, housekeeping_supervisor ou comptable), **When** il navigue vers l'onglet `/front-office/payments`, **Then** la page s'affiche avec deux sous-sections : paiements du jour et factures du jour.
+1. **Given** l'utilisateur est connecté (admin, manager, receptionist, housekeeping_supervisor ou comptable), **When** il navigue vers l'onglet `/front-office/payments`, **Then** la page s'affiche avec les sous-sections paiements du jour et factures du jour ; la sous-section "Consultation de folio" est affichée pour les rôles admin, manager, receptionist et comptable uniquement.
 2. **Given** l'utilisateur consulte la sous-section des paiements, **When** les données sont chargées, **Then** la liste des paiements du jour est affichée avec le montant, le mode de paiement, et la date de traitement.
 3. **Given** l'utilisateur consulte la sous-section des factures, **When** les données sont chargées, **Then** la liste des folios clôturés du jour est affichée avec le montant total et les prestations associées.
 4. **Given** aucun paiement ou facture n'existe pour la date demandée, **When** l'utilisateur consulte la sous-section correspondante, **Then** un message "Aucune donnée pour cette date" est affiché (pas d'erreur).
+5. **Given** l'utilisateur a le rôle comptable (ou admin, manager, receptionist), **When** il saisit un folioId dans la sous-section "Consultation de folio", **Then** le détail complet du folio (`GET /api/folios/:folioId`) est affiché en lecture seule — prestations `allItems`, total (`totalAmount`) — sans aucun bouton d'ajout, de masquage ou de suppression.
+6. **Given** l'utilisateur a le rôle comptable (ou admin, manager, receptionist), **When** il saisit un bookingId dans la sous-section "Consultation de folio", **Then** l'extrait de compte (`GET /api/checkout/:bookingId/statement`) est affiché en lecture seule — folios A et B, prestations, paiements, totalCharges, totalPaid — sans aucune action de modification.
+7. **Given** l'utilisateur a le rôle housekeeping_supervisor, **When** il consulte la page `/front-office/payments`, **Then** la sous-section "Consultation de folio" n'est pas affichée (pas de droit GET sur les folios selon la matrice front-office.md §4).
+8. **Given** un folio ou une réservation introuvable est recherché, **When** l'utilisateur valide la recherche, **Then** le message d'erreur exact du backend est affiché (ex: "Folio introuvable") sans crash ni page vide.
 
 ---
 
@@ -155,6 +159,7 @@ En tant que **gouvernante (housekeeping_supervisor)**, je ne dois pouvoir que co
 - **Statut housekeeping invalide** : Si l'utilisateur tente de filtrer avec un statut housekeeping invalide (hors liste : sale, nettoyage_en_cours, propre, controlee, bloquee), le backend retourne une erreur 400 qui doit être affichée à l'utilisateur.
 - **Session expirée pendant l'opération** : Si le token expire pendant une action de check-in ou check-out, la redirection vers /login doit s'effectuer sans perte de données (l'utilisateur peut reprendre après reconnexion).
 - **Pro-forma indisponible** : Si le statut de la réservation n'est pas status_option, status_confirmed ou status_voucher, afficher le message d'erreur exact "Pro-forma indisponible. Statut actuel: <status>".
+- **Folio ou réservation introuvable en consultation** : Dans la sous-section "Consultation de folio" de `/front-office/payments`, un folioId ou bookingId inexistant affiche le message d'erreur exact du backend (ex: "Folio introuvable") — jamais de crash ni de tableau vide silencieux.
 
 ## Requirements
 
@@ -206,13 +211,15 @@ En tant que **gouvernante (housekeeping_supervisor)**, je ne dois pouvoir que co
 - **FR-030**: System MUST display the daily payments list loaded from `GET /api/payments?date=YYYY-MM-DD`, accessible to all authenticated roles via the `/front-office/payments` route (third FrontOfficeTabs tab).
 - **FR-031**: System MUST display the daily invoices/closed folios list loaded from `GET /api/invoices?date=YYYY-MM-DD`, accessible to all authenticated roles via the `/front-office/payments` route.
 - **FR-032**: System MUST display an empty-state message "Aucune donnée pour cette date" when the API returns zero results for payments or invoices.
+- **FR-037**: System MUST provide a read-only "Consultation de folio" subsection on the `/front-office/payments` route, allowing roles admin, manager, receptionist and comptable to load a folio detail via `GET /api/folios/:folioId` (search by folioId) or via `GET /api/checkout/:bookingId/statement` (search by bookingId). The subsection MUST NOT display any modification action (add, toggle visibility, delete) for any role — consultation only. This subsection is the concrete UI path through which the comptable role exercises its GET access to folios (FR-033), since the check-in/check-out pages are blocked for it by the middleware. For the housekeeping_supervisor role, the subsection MUST NOT be rendered.
 
 #### Contrôle d'Accès et Sécurité
 
-- **FR-033**: The middleware (`middleware.ts`) MUST restrict route access according to the exact role matrix defined in front-office.md §4: housekeeping_supervisor restricted to rooms only; comptable restricted to folios (GET), payments (GET), and invoices (GET); receptionist allowed full check-in/check-out/folios except DELETE folio items. The `/front-office/payments` route is an exception — accessible to all authenticated roles (admin, manager, receptionist, housekeeping_supervisor, comptable).
+- **FR-033**: The middleware (`middleware.ts`) MUST restrict route access according to the exact role matrix defined in front-office.md §4: housekeeping_supervisor restricted to rooms only (check-in page, rooms zone); comptable restricted to folios (GET), payments (GET), and invoices (GET) — its GET access to folios MUST be exercisable through the read-only "Consultation de folio" subsection of the `/front-office/payments` route (FR-037), the only page where a folio is visible to it; receptionist allowed full check-in/check-out/folios except DELETE folio items. The `/front-office/payments` route is an exception — accessible to all authenticated roles (admin, manager, receptionist, housekeeping_supervisor, comptable).
 - **FR-034**: System MUST conditionally render UI actions based on the user's role at the component level — no action button shall be visible for unauthorized roles.
 - **FR-035**: System MUST read the user's role from the Zustand auth store (`useAuthStore`) for client-side role checks, never from raw JWT decoding.
 - **FR-036**: System MUST NOT expose any UI to modify folios or check-in after check-out (irreversibility enforced by disabling all modification actions when status is `status_checked_out`).
+- **FR-038**: System MUST NOT expose any UI element (button, link, form) that triggers the seed endpoint (`POST /api/seed` on the front-office service, reachable via the gateway at `POST /api/front-office/seed`) — this endpoint is unauthenticated and destructive per front-office.md §2.1. No seed data in `lib/api/frontOffice.ts`, no button/link/form referencing it anywhere in the UI. Consistent with DASH-FR-029 (analytics dashboard) and FR-015 (analytics module).
 
 ### Key Entities
 
@@ -232,7 +239,7 @@ En tant que **gouvernante (housekeeping_supervisor)**, je ne dois pouvoir que co
 
 - **SC-001**: Un réceptionniste peut consulter les chambres, effectuer un check-in complet avec pro-forma, gérer les prestations d'un folio (sauf suppression), et effectuer un check-out avec calcul exact du montant à encaisser, le tout sans accès à la suppression de prestation ni aux statistiques de performance.
 - **SC-002**: Une gouvernante (housekeeping_supervisor) peut consulter les chambres et changer leur statut housekeeping, sans aucun accès aux écrans de check-in, check-out ou folios.
-- **SC-003**: Un comptable peut consulter les folios, paiements et factures en lecture seule, sans aucune action de modification disponible dans l'UI.
+- **SC-003**: Un comptable peut consulter les folios, paiements et factures en lecture seule, sans aucune action de modification disponible dans l'UI — la consultation des folios s'exerce via la sous-section "Consultation de folio" de `/front-office/payments` (recherche par bookingId ou folioId), le comptable étant bloqué du check-in/check-out par le middleware.
 - **SC-004**: Aucune donnée codée en dur (FOLIO_A_LINES, résumé de paiement "3 000 DH", etc.) ne subsiste dans le code final — toutes les valeurs affichées proviennent des appels API.
 - **SC-005**: Toutes les erreurs métier précises du backend (chambre non prête, dossier verrouillé, montant incorrect, statut non autorisé) sont affichées textuellement à l'utilisateur — aucun message générique "Erreur" pour ces cas.
 - **SC-006**: Les actions de modification de folio (ajout, masquage, suppression) sont désactivées dans l'UI quand le statut du folio est "closed", avec un message explicite.
@@ -240,13 +247,15 @@ En tant que **gouvernante (housekeeping_supervisor)**, je ne dois pouvoir que co
 - **SC-008**: Le montant total du folio (totalAmount) reste inchangé après masquage d'une prestation à l'impression — confirmé par inspection visuelle.
 - **SC-009**: Le check-out échoue côté frontend (pas d'envoi API) si le total des paiements saisis ne correspond pas au solde dû, avec un message d'erreur explicite.
 - **SC-010**: Une notification explicite est affichée après check-out réussi, informant du caractère irréversible de l'opération.
+- **SC-011**: Le endpoint de seed n'est jamais atteignable depuis un élément UI de l'application (bouton, lien, formulaire) — confirmé par revue de code. (FR-038)
 
 ## Assumptions
 
 - Le module Front Office utilise les routes existantes `app/front-office/check-in/page.tsx` et `app/front-office/check-out/page.tsx` avec l'onglet `FrontOfficeTabs` pour la navigation (redirection `/front-office` → `/front-office/check-in`). Un troisième onglet est ajouté pour les paiements et factures du jour sur la route `/front-office/payments`.
+- La route `/front-office/payments` inclut une troisième sous-section "Consultation de folio" en lecture seule (FR-037). C'est le seul chemin UI par lequel le comptable accède aux folios : le middleware lui bloque `/front-office/check-in` et `/front-office/check-out`. Dans la Sidebar, le lien "Front Office" pointe vers `/front-office/payments` pour le rôle comptable, vers `/front-office/check-in` pour les autres rôles autorisés. Les onglets `FrontOfficeTabs` sont filtrés par rôle : le comptable ne voit que l'onglet "Paiements", la gouvernante (housekeeping_supervisor) voit "Check-in" (zone chambres uniquement) et "Paiements".
 - Les fonctions API sont implémentées dans `lib/api/frontOffice.ts` suivant le pattern Service-Per-File défini dans la constitution, avec le `apiClient` partagé.
 - Les types TypeScript correspondants sont ajoutés dans `types/index.ts` (Room, Folio, FolioItem, Statement, Payment, Invoice, etc.).
-- Le middleware `middleware.ts` est modifié pour ajouter les routes `/front-office/check-in`, `/front-office/check-out`, et leurs sous-routes dans la map `ROLE_RESTRICTIONS` selon la matrice exacte de front-office.md §4. La route `/front-office/payments` est accessible à tous les rôles authentifiés (admin, manager, receptionist, housekeeping_supervisor, comptable) — périmètre d'accès plus large que les deux autres onglets.
+- Le middleware `middleware.ts` est modifié pour ajouter les routes `/front-office/check-in`, `/front-office/check-out`, et leurs sous-routes dans la map `ROLE_RESTRICTIONS` selon la matrice exacte de front-office.md §4 (check-in : admin/manager/receptionist/housekeeping_supervisor ; check-out : admin/manager/receptionist). La route `/front-office/payments` est accessible à tous les rôles authentifiés (admin, manager, receptionist, housekeeping_supervisor, comptable) — périmètre d'accès plus large que les deux autres onglets.
 - **Restriction UI volontaire, plus stricte que l'API backend** : Les endpoints `GET /api/checkin/:bookingId`, `GET /api/checkin/:bookingId/proforma` et `GET /api/checkout/:bookingId/statement` n'ont aucun middleware `authorizeRoles` côté backend (front-office.md §2.3, §2.4) — tout utilisateur authentifié, quel que soit son rôle, peut techniquement les appeler. La spec restreint volontairement l'accès UI pour housekeeping_supervisor et comptable à ces fonctionnalités (US1, US7, FR-033/034), ce qui est un choix produit délibéré. L'implémentation doit garantir que ces restrictions sont appliquées à la fois dans le middleware (blocage de navigation) et au niveau des composants (éléments UI masqués), bien que l'API backend ne les refuse pas.
 - Les appels API utilisent les préfixes gateway (`/api/rooms`, `/api/checkin`, `/api/checkout`, `/api/folios`, `/api/payments`, `/api/invoices`) et passent par `apiClient` — jamais d'appel direct au service front-office (port 4005).
 - **Absence de fallback mock** : contrairement au pattern constitutionnel général (Section III, Mock/API Pattern), ce module suit le pattern Analytics validé. Aucune fonction API dans `lib/api/frontOffice.ts` ne vérifie `USE_MOCKS` et aucune ne contient de bloc catch avec retour de données mockées. En cas d'échec API, un message d'erreur utilisateur clair est affiché : "Service temporairement indisponible" pour les erreurs 502/infrastructure, ou le message métier exact du backend pour les erreurs 400/404/503 spécifiques (voir FR-011, FR-009).

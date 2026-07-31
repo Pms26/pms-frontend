@@ -5,7 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useModalToast } from '@/components/context/ModalToastContext';
 import { updateRoomStatus } from '@/lib/api/housekeeping';
 import { getClosureDetail, downloadReport, getClosureReports } from '@/lib/api/nightAudit';
-import type { RoomStatus, ClosureDetail, NightAuditReport } from '@/types';
+import type { HousekeepingStatus, ClosureDetail, NightAuditReport } from '@/types';
 
 export function ReservationModal() {
   const { isReservationOpen, closeReservation } = useModalToast();
@@ -131,7 +131,7 @@ export function RoomModal() {
     showToast,
   } = useModalToast();
 
-  const [localStatus, setLocalStatus] = useState<RoomStatus | null>(selectedRoomStatus);
+  const [localStatus, setLocalStatus] = useState<HousekeepingStatus | null>(selectedRoomStatus);
   const [localReason, setLocalReason] = useState(selectedRoomReason);
 
   useEffect(() => {
@@ -164,14 +164,13 @@ export function RoomModal() {
             <select
               className="form-select pms-input mb-3"
               value={localStatus ?? ''}
-              onChange={(e) => setLocalStatus(e.target.value as RoomStatus)}
+              onChange={(e) => setLocalStatus(e.target.value as HousekeepingStatus)}
             >
               <option value="sale">Sale</option>
-              <option value="encours">Nettoyage en cours</option>
+              <option value="nettoyage_en_cours">Nettoyage en cours</option>
               <option value="propre">Propre</option>
               <option value="controlee">Contrôlée</option>
               <option value="bloquee">Bloquée</option>
-              <option value="inhouse">In-House</option>
             </select>
             {localStatus === 'bloquee' && (
               <div>

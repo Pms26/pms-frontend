@@ -1,206 +1,223 @@
 // ═══════════════════════════════════════════════════════════
 // OASIS PMS — Front Office API
 // Backend: front-office (port 4005) via gateway
-// Routes: /api/rooms, /api/checkin, /api/checkout, /api/folios
+// Routes: /api/rooms, /api/checkin, /api/checkout, /api/folios,
+//         /api/payments, /api/invoices
+// Pattern: Analytics (aucun fallback mock) — les erreurs backend
+// sont normalisées ici : 502 → « Service temporairement
+// indisponible », sinon message exact du body { error }.
 // ═══════════════════════════════════════════════════════════
 
-import apiClient, { USE_MOCKS, mockDelay } from './client';
-import { updateReservation } from './reservations';
-import type { Reservation, FolioEntry, CheckOutSummary, PaymentMode } from '@/types';
+import axios from 'axios';
+import apiClient from './client';
+import type {
+  Room,
+  HousekeepingStatus,
+  Booking,
+  Proforma,
+  FolioDetail,
+  Statement,
+  PaymentsResponse,
+  InvoicesResponse,
+  CheckInResult,
+  CheckOutPayment,
+  CheckOutResult,
+} from '@/types';
 
-const MOCK_CHECKINS: Reservation[] = [
-  { id: 'R-2026-003', client: 'Cherkaoui Yassine', room: '102', arrival: '2026-07-09', departure: '2026-07-14', regime: 'DP', segment: 'b2b', status: 'confirmed', total: '8 400 DH', pax: 2 },
-  { id: 'R-2026-004', client: 'Idrissi Nadia', room: '301', arrival: '2026-07-09', departure: '2026-07-11', regime: 'BB', segment: 'direct', status: 'confirmed', total: '4 200 DH', pax: 1 },
-];
-
-const MOCK_CHECKOUTS: Reservation[] = [
-  { id: 'R-2026-006', client: 'Hassan Ahmed', room: '402', arrival: '2026-07-08', departure: '2026-07-09', regime: 'BB', segment: 'b2b', status: 'checkout', total: '2 100 DH', pax: 1 },
-];
-
-const MOCK_FOLIO_A: FolioEntry[] = [
-  { prestation: 'Hébergement — 2 nuits', date: '2026-07-08', qty: 2, amount: '3 600 DH' },
-  { prestation: 'Room Service — Dîner', date: '2026-07-08', qty: 1, amount: '450 DH' },
-  { prestation: 'Minibar', date: '2026-07-09', qty: 1, amount: '120 DH' },
-];
-
-const MOCK_FOLIO_B: FolioEntry[] = [
-  { prestation: 'Transfert aéroport', date: '2026-07-08', qty: 1, amount: '250 DH' },
-  { prestation: 'SPA — Massage 60mn', date: '2026-07-09', qty: 1, amount: '350 DH' },
-];
-
-function mapRoomToFrontend(r: any): Reservation {
-  return {
-    id: r.bookingId || r._id || r.bookingRef || r.id || r.roomNumber,
-    client: r.guestName || r.customerName || 'Client',
-    room: r.roomNumber || r.numero || r.id,
-    arrival: r.checkInDate ? r.checkInDate.slice(0, 10) : '',
-    departure: r.checkOutDate ? r.checkOutDate.slice(0, 10) : '',
-    regime: r.boardType || 'BB',
-    segment: r.segment || 'direct',
-    status: r.status === 'status_confirmed' ? 'confirmed' : r.status === 'status_checked_in' ? 'inhouse' : r.status || 'confirmed',
-    total: r.totalAmount ? `${Number(r.totalAmount).toLocaleString('fr-FR')} DH` : '0 DH',
-    pax: r.adults || 2,
-  };
+function toApiError(err: unknown): Error {
+  if (axios.isAxiosError(err)) {
+    const status = err.response?.status;
+    if (status === 502) return new Error('Service temporairement indisponible');
+    const body = err.response?.data as { error?: string } | undefined;
+    if (body?.error) return new Error(body.error);
+  }
+  return new Error('Service temporairement indisponible');
 }
 
-export async function getPendingCheckIns(): Promise<Reservation[]> {
-  if (USE_MOCKS) {
-    await mockDelay();
-    return [...MOCK_CHECKINS];
-  }
+// ─── Chambres ─────────────────────────────────────────────
 
+export async function getRooms(): Promise<Room[]> {
   try {
     const res = await apiClient.get('/api/front-office/rooms');
-    const data = res.data;
-    const rooms = data.rooms || data || [];
-    return rooms.map((r: any) => ({
-      id: r.bookingId || r.bookingRef || r.id || r.roomNumber,
-      client: r.guestName || r.customerName || r.roomNumber,
-      room: r.roomNumber || r.numero || '',
-      arrival: r.checkInDate ? r.checkInDate.slice(0, 10) : '',
-      departure: r.checkOutDate ? r.checkOutDate.slice(0, 10) : '',
-      regime: r.boardType || 'BB',
-      segment: r.segment || 'direct',
-      status: 'confirmed' as const,
-      total: r.totalAmount ? `${Number(r.totalAmount).toLocaleString('fr-FR')} DH` : '0 DH',
-      pax: r.adults || 2,
-    }));
-  } catch {
-    return [];
+    return res.data.rooms || [];
+  } catch (err) {
+    throw toApiError(err);
   }
 }
 
-export async function getPendingCheckOuts(): Promise<Reservation[]> {
-  if (USE_MOCKS) {
-    await mockDelay();
-    return [...MOCK_CHECKOUTS];
-  }
-
+export async function getRoomsByStatus(status: HousekeepingStatus): Promise<Room[]> {
   try {
-    const res = await apiClient.get('/api/front-office/rooms/status/sale');
-    const data = res.data;
-    const rooms = data.rooms || data || [];
-    return rooms.map((r: any) => ({
-      id: r.bookingId || r.bookingRef || r.id || r.roomNumber,
-      client: r.guestName || r.customerName || r.roomNumber,
-      room: r.roomNumber || r.numero || '',
-      arrival: r.checkInDate ? r.checkInDate.slice(0, 10) : '',
-      departure: r.checkOutDate ? r.checkOutDate.slice(0, 10) : '',
-      regime: r.boardType || 'BB',
-      segment: r.segment || 'direct',
-      status: 'inhouse' as const,
-      total: r.totalAmount ? `${Number(r.totalAmount).toLocaleString('fr-FR')} DH` : '0 DH',
-      pax: r.adults || 2,
-    }));
-  } catch {
-    return [];
+    const res = await apiClient.get(`/api/front-office/rooms/status/${status}`);
+    return res.data.rooms || [];
+  } catch (err) {
+    throw toApiError(err);
   }
 }
 
-export async function getFolioA(reservationId: string): Promise<{ entries: FolioEntry[]; total: string }> {
-  if (USE_MOCKS) {
-    await mockDelay(300);
-    return { entries: MOCK_FOLIO_A, total: '4 230 DH' };
-  }
-
+export async function getRoom(roomId: string): Promise<Room> {
   try {
-    const res = await apiClient.get(`/api/front-office/folios/${reservationId}`);
-    const data = res.data;
-    const items = data.allItems || data.printableItems || data.entries || [];
-    const entries: FolioEntry[] = items.map((item: any) => ({
-      prestation: item.description || item.prestation || item.label || '',
-      date: item.date ? item.date.slice(0, 10) : '',
-      qty: item.quantity || item.qty || 1,
-      amount: item.amount != null ? `${Number(item.amount).toLocaleString('fr-FR')} DH` : '0 DH',
-    }));
-    const total = data.printableTotal || data.totalAmount
-      ? `${Number(data.printableTotal || data.totalAmount).toLocaleString('fr-FR')} DH`
-      : '0 DH';
-    return { entries, total };
-  } catch {
-    return { entries: [], total: '0 DH' };
+    const res = await apiClient.get(`/api/front-office/rooms/${roomId}`);
+    return res.data;
+  } catch (err) {
+    throw toApiError(err);
   }
 }
 
-export async function getFolioB(reservationId: string): Promise<{ entries: FolioEntry[]; total: string }> {
-  if (USE_MOCKS) {
-    await mockDelay(300);
-    return { entries: MOCK_FOLIO_B, total: '600 DH' };
-  }
-
+export async function updateRoomStatus(
+  roomId: string,
+  housekeepingStatus: HousekeepingStatus,
+  blockReason?: string,
+): Promise<Room> {
   try {
-    const res = await apiClient.get(`/api/front-office/folios/${reservationId}`);
-    const data = res.data;
-    const items = data.allItems || data.printableItems || data.entries || [];
-    const entries: FolioEntry[] = items.map((item: any) => ({
-      prestation: item.description || item.prestation || item.label || '',
-      date: item.date ? item.date.slice(0, 10) : '',
-      qty: item.quantity || item.qty || 1,
-      amount: item.amount != null ? `${Number(item.amount).toLocaleString('fr-FR')} DH` : '0 DH',
-    }));
-    const total = data.printableTotal || data.totalAmount
-      ? `${Number(data.printableTotal || data.totalAmount).toLocaleString('fr-FR')} DH`
-      : '0 DH';
-    return { entries, total };
-  } catch {
-    return { entries: [], total: '0 DH' };
+    const res = await apiClient.patch(`/api/front-office/rooms/${roomId}/status`, {
+      housekeepingStatus,
+      blockReason: housekeepingStatus === 'bloquee' ? blockReason : undefined,
+    });
+    return res.data.room;
+  } catch (err) {
+    throw toApiError(err);
   }
 }
 
-export async function performCheckIn(reservationId: string): Promise<{ success: boolean; message: string }> {
-  if (USE_MOCKS) {
-    await mockDelay(600);
-    return { success: true, message: `Check-in effectué pour ${reservationId}` };
-  }
+// ─── Check-in ─────────────────────────────────────────────
 
+export async function getBooking(bookingId: string): Promise<Booking> {
   try {
-    const res = await apiClient.post(`/api/front-office/checkin/${reservationId}`);
-    const data = res.data;
-    return { success: true, message: data.message || `Check-in effectué pour ${reservationId}` };
-  } catch (err: any) {
-    return { success: false, message: err?.response?.data?.error || err?.response?.data?.message || 'Erreur check-in' };
+    const res = await apiClient.get(`/api/front-office/checkin/${bookingId}`);
+    return res.data.booking;
+  } catch (err) {
+    throw toApiError(err);
+  }
+}
+
+export async function getProforma(bookingId: string): Promise<Proforma> {
+  try {
+    const res = await apiClient.get(`/api/front-office/checkin/${bookingId}/proforma`);
+    return res.data;
+  } catch (err) {
+    throw toApiError(err);
+  }
+}
+
+export async function performCheckIn(bookingId: string): Promise<CheckInResult> {
+  try {
+    const res = await apiClient.post(`/api/front-office/checkin/${bookingId}`);
+    return res.data;
+  } catch (err) {
+    throw toApiError(err);
+  }
+}
+
+export async function cancelCheckIn(
+  bookingId: string,
+): Promise<{ message: string; booking: { id: string; status: string } }> {
+  try {
+    const res = await apiClient.delete(`/api/front-office/checkin/${bookingId}`);
+    return res.data;
+  } catch (err) {
+    throw toApiError(err);
+  }
+}
+
+// ─── Check-out ────────────────────────────────────────────
+
+export async function getStatement(bookingId: string): Promise<Statement> {
+  try {
+    const res = await apiClient.get(`/api/front-office/checkout/${bookingId}/statement`);
+    return res.data;
+  } catch (err) {
+    throw toApiError(err);
   }
 }
 
 export async function performCheckOut(
-  reservationId: string,
-  paymentModes: PaymentMode[],
-): Promise<{ success: boolean; message: string }> {
-  if (USE_MOCKS) {
-    await mockDelay(800);
-    return { success: true, message: `Check-out validé pour ${reservationId}` };
-  }
-
+  bookingId: string,
+  payments: CheckOutPayment[],
+): Promise<CheckOutResult> {
   try {
-    const res = await apiClient.post(`/api/front-office/checkout/${reservationId}`, {
-      payments: paymentModes.map((pm) => ({
-        paymentMethod: pm,
-        folioType: 'A',
-      })),
-    });
-    const data = res.data;
-    return { success: true, message: data.message || `Check-out validé pour ${reservationId}` };
-  } catch (err: any) {
-    return { success: false, message: err?.response?.data?.error || err?.response?.data?.message || 'Erreur check-out' };
+    const res = await apiClient.post(`/api/front-office/checkout/${bookingId}`, { payments });
+    return res.data;
+  } catch (err) {
+    throw toApiError(err);
   }
 }
 
-export async function getCheckOutSummary(reservationId: string): Promise<CheckOutSummary> {
-  if (USE_MOCKS) {
-    await mockDelay(300);
-    return { hebergement: '3 000 DH', extras: '450 DH', taxeSejour: '90 DH', total: '3 540 DH' };
-  }
+// ─── Folios ───────────────────────────────────────────────
 
+export async function getFolio(folioId: string): Promise<FolioDetail> {
   try {
-    const res = await apiClient.get(`/api/front-office/checkout/${reservationId}/statement`);
-    const data = res.data;
-    return {
-      hebergement: `${(data.totalCharges || 0).toLocaleString('fr-FR')} DH`,
-      extras: '0 DH',
-      taxeSejour: '0 DH',
-      total: `${(data.totalCharges || 0).toLocaleString('fr-FR')} DH`,
-    };
-  } catch {
-    return { hebergement: '0 DH', extras: '0 DH', taxeSejour: '0 DH', total: '0 DH' };
+    const res = await apiClient.get(`/api/front-office/folios/${folioId}`);
+    return res.data;
+  } catch (err) {
+    throw toApiError(err);
+  }
+}
+
+export async function addFolioItem(
+  folioId: string,
+  item: { description: string; category: string; quantity: number; unitPrice: number; taxRate?: number },
+): Promise<{ message: string; item: unknown; folioTotal: number }> {
+  try {
+    const res = await apiClient.post(`/api/front-office/folios/${folioId}/items`, item);
+    return res.data;
+  } catch (err) {
+    throw toApiError(err);
+  }
+}
+
+export async function setItemVisibility(
+  itemId: string,
+  isVisible: boolean,
+): Promise<{ message: string; item: { id: string; description: string; isVisibleOnPrint: boolean } }> {
+  try {
+    const res = await apiClient.patch(`/api/front-office/folios/items/${itemId}/visibility`, { isVisible });
+    return res.data;
+  } catch (err) {
+    throw toApiError(err);
+  }
+}
+
+export async function setItemsVisibility(
+  folioId: string,
+  itemIds: string[],
+  isVisible: boolean,
+): Promise<{ message: string }> {
+  try {
+    const res = await apiClient.patch(`/api/front-office/folios/${folioId}/items/visibility`, {
+      itemIds,
+      isVisible,
+    });
+    return res.data;
+  } catch (err) {
+    throw toApiError(err);
+  }
+}
+
+export async function deleteFolioItem(itemId: string): Promise<{ message: string; folioTotal: number }> {
+  try {
+    const res = await apiClient.delete(`/api/front-office/folios/items/${itemId}`);
+    return res.data;
+  } catch (err) {
+    throw toApiError(err);
+  }
+}
+
+// ─── Paiements & factures du jour ─────────────────────────
+
+export async function getPayments(date: string): Promise<PaymentsResponse> {
+  try {
+    const res = await apiClient.get('/api/front-office/payments', { params: { date } });
+    return res.data;
+  } catch (err) {
+    throw toApiError(err);
+  }
+}
+
+export async function getInvoices(date: string): Promise<InvoicesResponse> {
+  try {
+    const res = await apiClient.get('/api/front-office/invoices', { params: { date } });
+    return res.data;
+  } catch (err) {
+    throw toApiError(err);
   }
 }

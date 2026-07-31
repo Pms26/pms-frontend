@@ -4,17 +4,21 @@ import { useEffect, useState } from 'react';
 import { getRooms } from '@/lib/api/housekeeping';
 import { getReservations } from '@/lib/api/reservations';
 import { useModalToast } from '@/components/context/ModalToastContext';
+import type { Room } from '@/types';
 
 const STATUS_COLORS_PLAN: Record<string, string> = {
   option: '#6366f1', confirmed: '#10b981', voucher: '#f59e0b',
   inhouse: '#06b6d4', checkout: '#6b7280', noshow: '#ef4444', cancelled: '#374151'
 };
 
-interface Room {
-  id: string;
-  type: string;
-  status: string;
-}
+const ROOM_TYPE_LABELS: Record<string, string> = {
+  standard: 'Standard',
+  superior: 'Supérieure',
+  suite: 'Suite',
+  suite_deluxe: 'Suite Deluxe',
+  lodge: 'Lodge',
+  villa: 'Villa',
+};
 
 interface Reservation {
   id: string;
@@ -66,9 +70,7 @@ export default function PlanningGrid() {
     );
   };
 
-  const isToday = (date: Date) => date.toDateString() === new Date().toDateString();
-
-  // Build grid children: all as direct children of grid container
+  const isToday = (date: Date) => date.toDateString() === new Date().toDateString();  // Build grid children: all as direct children of grid container
   // Grid auto-flows: 8 columns (120px + 7×1fr), wraps to new row when full
   const gridChildren: React.ReactNode[] = [];
 
@@ -111,14 +113,14 @@ export default function PlanningGrid() {
         key={`room-label-${room.id}`}
         className="planning-room-label"
       >
-        <span style={{ fontSize: '0.85rem' }}>Ch. {room.id}</span>
-        <small style={{ color: room.status || 'propre' }}>{room.type}</small>
+        <span style={{ fontSize: '0.85rem' }}>Ch. {room.roomNumber}</span>
+        <small style={{ color: room.housekeepingStatus || 'propre' }}>{ROOM_TYPE_LABELS[room.category] || room.category}</small>
       </div>
     );
 
     // 7 day cells for this room
     days.forEach((day, dayIdx) => {
-      const res = getReservationForCell(room.id, day);
+      const res = getReservationForCell(room.roomNumber, day);
       const cellToday = isToday(day);
       const resColor = res ? (STATUS_COLORS_PLAN[res.status] || '#6366f1') : undefined;
 
