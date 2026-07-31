@@ -1,11 +1,11 @@
 'use client';
-
 import React, { createContext, useContext, useState } from 'react';
 import type { RoomStatus } from '@/types';
 
 interface ModalToastContextValue {
   isReservationOpen: boolean;
-  openReservation: () => void;
+  reservationEditId: string | null;
+  openReservation: (id?: string) => void;
   closeReservation: () => void;
   isRoomOpen: boolean;
   openRoom: (roomId: string, status: RoomStatus, reason?: string) => void;
@@ -24,14 +24,23 @@ const ModalToastContext = createContext<ModalToastContextValue | undefined>(unde
 
 export function ModalToastProvider({ children }: { children: React.ReactNode }) {
   const [isReservationOpen, setReservationOpen] = useState(false);
+  const [reservationEditId, setReservationEditId] = useState<string | null>(null);
   const [isRoomOpen, setRoomOpen] = useState(false);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [selectedRoomStatus, setSelectedRoomStatus] = useState<RoomStatus | null>(null);
   const [selectedRoomReason, setSelectedRoomReason] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const openReservation = () => setReservationOpen(true);
-  const closeReservation = () => setReservationOpen(false);
+  
+  const openReservation = (id?: string) => {
+    setReservationEditId(id || null);
+    setReservationOpen(true);
+  };
+  const closeReservation = () => {
+    setReservationOpen(false);
+    setReservationEditId(null);
+  };
+
   const openRoom = (roomId: string, status: RoomStatus, reason: string = '') => {
     setSelectedRoomId(roomId);
     setSelectedRoomStatus(status);
@@ -44,15 +53,16 @@ export function ModalToastProvider({ children }: { children: React.ReactNode }) 
     setSelectedRoomStatus(null);
     setSelectedRoomReason('');
   };
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
-    // auto-hide after 3s
     setTimeout(() => setToastMessage(null), 3000);
   };
   const hideToast = () => setToastMessage(null);
 
   const value: ModalToastContextValue = {
     isReservationOpen,
+    reservationEditId,
     openReservation,
     closeReservation,
     isRoomOpen,
