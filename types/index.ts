@@ -73,6 +73,7 @@ export type MealPlan = 'BB' | 'DP' | 'PC';
 
 export interface Reservation {
   id: string;
+  reference?: string;
   client: string;
   room: string;
   arrival: string;   // ISO date

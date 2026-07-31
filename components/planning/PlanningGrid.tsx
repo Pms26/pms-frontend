@@ -18,11 +18,22 @@ interface Room {
 
 interface Reservation {
   id: string;
+  reference?: string;
   client: string;
   room: string;
   arrival: string;
   departure: string;
   status: string;
+}
+
+// Renvoie le lundi de la semaine contenant la date donnée
+function getMonday(date: Date): Date {
+  const d = new Date(date);
+  const day = d.getDay(); // 0 = dimanche, 1 = lundi, ...
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
 }
 
 export default function PlanningGrid() {
@@ -39,6 +50,8 @@ export default function PlanningGrid() {
       const rs = await getRooms();
       const res = await getReservations();
       if (!mounted) return;
+      console.log('ROOMS:', rs);
+      console.log('RESERVATIONS:', res);
       setRooms(rs);
       setReservations(res);
     }
@@ -47,16 +60,20 @@ export default function PlanningGrid() {
   }, []);
 
   useEffect(() => {
-    const baseDate = new Date(2026, 6, 8 + weekOffset * 7);
+    // Semaine réelle actuelle, décalée par weekOffset semaines
+    const baseMonday = getMonday(new Date());
+    baseMonday.setDate(baseMonday.getDate() + weekOffset * 7);
+
     const newDays = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(baseDate);
+      const d = new Date(baseMonday);
       d.setDate(d.getDate() + i);
       return d;
     });
     setDays(newDays);
 
     const fmt = (d: Date) => d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'long' });
-    setRangeLabel(`${fmt(newDays[0])} – ${fmt(newDays[6])} 2026`);
+    const year = newDays[0].getFullYear();
+    setRangeLabel(`${fmt(newDays[0])} – ${fmt(newDays[6])} ${year}`);
   }, [weekOffset]);
 
   const getReservationForCell = (roomId: string, date: Date): Reservation | undefined => {
@@ -68,17 +85,11 @@ export default function PlanningGrid() {
 
   const isToday = (date: Date) => date.toDateString() === new Date().toDateString();
 
-  // Build grid children: all as direct children of grid container
-  // Grid auto-flows: 8 columns (120px + 7×1fr), wraps to new row when full
+
   const gridChildren: React.ReactNode[] = [];
 
-  // Add header row (8 cells total)
   gridChildren.push(
-    <div
-      key="header-chambre"
-      className="planning-cell-header"
-      style={{ minWidth: '120px' }}
-    >
+    <div key="header-chambre" className="planning-cell-header" style={{ minWidth: '120px' }}>
       Chambre
     </div>
   );
@@ -87,11 +98,7 @@ export default function PlanningGrid() {
       <div
         key={`header-day-${idx}`}
         className="planning-cell-header"
-        style={
-          isToday(day)
-            ? { color: '#6366f1', background: 'rgba(99,102,241,0.1)' }
-            : {}
-        }
+        style={isToday(day) ? { color: '#6366f1', background: 'rgba(99,102,241,0.1)' } : {}}
       >
         <div style={{ fontSize: '0.7rem' }}>
           {day.toLocaleDateString('fr-FR', { weekday: 'short' }).toUpperCase()}
@@ -103,20 +110,14 @@ export default function PlanningGrid() {
     );
   });
 
-  // Add room rows (8 cells per room: label + 7 day cells)
   rooms.forEach((room) => {
-    // Room label cell (first column)
     gridChildren.push(
-      <div
-        key={`room-label-${room.id}`}
-        className="planning-room-label"
-      >
+      <div key={`room-label-${room.id}`} className="planning-room-label">
         <span style={{ fontSize: '0.85rem' }}>Ch. {room.id}</span>
         <small style={{ color: room.status || 'propre' }}>{room.type}</small>
       </div>
     );
 
-    // 7 day cells for this room
     days.forEach((day, dayIdx) => {
       const res = getReservationForCell(room.id, day);
       const cellToday = isToday(day);
@@ -135,8 +136,10 @@ export default function PlanningGrid() {
                 background: resColor,
                 left: '2px',
                 right: '2px',
+                cursor: 'pointer',
               }}
-              title={`${res.client} — ${res.status}`}
+              title={`${res.client} — clic pour ouvrir le dossier`}
+              onClick={() => openReservation(res.id)}
             >
               {res.client.split(' ')[0]}
             </div>
@@ -158,6 +161,11 @@ export default function PlanningGrid() {
           <button className="btn btn-ghost btn-sm" onClick={() => setWeekOffset((w) => w + 1)}>
             <i className="bi bi-chevron-right"></i>
           </button>
+          {weekOffset !== 0 && (
+            <button className="btn btn-ghost btn-sm" onClick={() => setWeekOffset(0)}>
+              Aujourd'hui
+            </button>
+          )}
           <button className="btn btn-pms btn-sm ms-2" onClick={() => openReservation()}>
             <i className="bi bi-plus-lg me-1"></i>Nouvelle réservation
           </button>
@@ -165,24 +173,12 @@ export default function PlanningGrid() {
       </div>
 
       <div className="planning-legend mb-3 d-flex flex-wrap gap-2">
-        <span className="legend-badge" style={{ ['--c' as any]: '#6366f1' } as any}>
-          Option/Provisoire
-        </span>
-        <span className="legend-badge" style={{ ['--c' as any]: '#10b981' } as any}>
-          Confirmée
-        </span>
-        <span className="legend-badge" style={{ ['--c' as any]: '#f59e0b' } as any}>
-          Garantie Agence
-        </span>
-        <span className="legend-badge" style={{ ['--c' as any]: '#06b6d4' } as any}>
-          In-House
-        </span>
-        <span className="legend-badge" style={{ ['--c' as any]: '#ef4444' } as any}>
-          No-Show
-        </span>
-        <span className="legend-badge" style={{ ['--c' as any]: '#6b7280' } as any}>
-          Annulée
-        </span>
+        <span className="legend-badge" style={{ ['--c' as any]: '#6366f1' } as any}>Option/Provisoire</span>
+        <span className="legend-badge" style={{ ['--c' as any]: '#10b981' } as any}>Confirmée</span>
+        <span className="legend-badge" style={{ ['--c' as any]: '#f59e0b' } as any}>Garantie Agence</span>
+        <span className="legend-badge" style={{ ['--c' as any]: '#06b6d4' } as any}>In-House</span>
+        <span className="legend-badge" style={{ ['--c' as any]: '#ef4444' } as any}>No-Show</span>
+        <span className="legend-badge" style={{ ['--c' as any]: '#6b7280' } as any}>Annulée</span>
       </div>
 
       <div className="planning-wrapper glass-card p-3">

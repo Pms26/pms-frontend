@@ -4,64 +4,390 @@ import { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useModalToast } from '@/components/context/ModalToastContext';
 import { updateRoomStatus } from '@/lib/api/housekeeping';
+import {
+  getRoomsForBooking,
+  getMarketSegmentsList,
+  getBookingRaw,
+  createBooking,
+  updateBookingRaw,
+  searchClients,
+  type BookingRoom,
+  type BookingMarketSegment,
+} from '@/lib/api/reservations';
 import { getClosureDetail, downloadReport, getClosureReports } from '@/lib/api/nightAudit';
-import type { RoomStatus, ClosureDetail, NightAuditReport } from '@/types';
+import type { RoomStatus, Client, ClosureDetail, NightAuditReport } from '@/types';
+
+const BASE_PRICE_BY_CATEGORY: Record<string, number> = {
+  Standard: 600,
+  'Supérieure': 800,
+  Suite: 1100,
+  'Suite Deluxe': 1500,
+  Lodge: 1300,
+  Villa: 2500,
+};
+const REGIME_SUPPLEMENT: Record<string, number> = { BB: 0, DP: 220, PC: 420 };
+
+function nightsBetween(arrival: string, departure: string): number {
+  if (!arrival || !departure) return 0;
+  const d1 = new Date(arrival);
+  const d2 = new Date(departure);
+  const diff = Math.round((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
+  return diff > 0 ? diff : 0;
+}
+
+interface FormState {
+  nom: string;
+  prenom: string;
+  nationalite: string;
+  passeport: string;
+  email: string;
+  telephone: string;
+  arrival: string;
+  departure: string;
+  roomId: string;
+  pax: number;
+  regime: 'BB' | 'DP' | 'PC';
+  segmentId: string;
+  taxeSejour: 'payable_a_reservation' | 'payable_sur_place';
+  acompteMontant: string;
+  acompteDate: string;
+  commentaires: string;
+}
+
+const EMPTY_FORM: FormState = {
+  nom: '',
+  prenom: '',
+  nationalite: '',
+  passeport: '',
+  email: '',
+  telephone: '',
+  arrival: '',
+  departure: '',
+  roomId: '',
+  pax: 2,
+  regime: 'BB',
+  segmentId: '',
+  taxeSejour: 'payable_a_reservation',
+  acompteMontant: '',
+  acompteDate: '',
+  commentaires: '',
+};
 
 export function ReservationModal() {
-  const { isReservationOpen, closeReservation } = useModalToast();
+  const { isReservationOpen, reservationEditId, closeReservation, showToast } = useModalToast();
+  const queryClient = useQueryClient();
+
+  const isEditMode = Boolean(reservationEditId);
+
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [rooms, setRooms] = useState<BookingRoom[]>([]);
+  const [segments, setSegments] = useState<BookingMarketSegment[]>([]);
+  const [loadingRefData, setLoadingRefData] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [isClosedBooking, setIsClosedBooking] = useState(false);
+  const [editReference, setEditReference] = useState<string | null>(null);
+
+  const [clientResults, setClientResults] = useState<Client[]>([]);
+  const [showClientDropdown, setShowClientDropdown] = useState(false);
+  const [linkedCustomerId, setLinkedCustomerId] = useState<string | null>(null);
+
+  const updateField = (field: keyof FormState, value: string | number) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  useEffect(() => {
+    if (!isReservationOpen) return;
+
+    let mounted = true;
+    setLoadingRefData(true);
+    setErrorMsg(null);
+
+    Promise.all([getRoomsForBooking(), getMarketSegmentsList()])
+      .then(([roomsData, segmentsData]) => {
+        if (!mounted) return;
+        setRooms(roomsData);
+        setSegments(segmentsData);
+      })
+      .catch(() => {
+        if (mounted) setErrorMsg('Impossible de charger les chambres/segments.');
+      })
+      .finally(() => {
+        if (mounted) setLoadingRefData(false);
+      });
+
+    return () => { mounted = false; };
+  }, [isReservationOpen]);
+
+  useEffect(() => {
+    if (!isReservationOpen) return;
+
+    if (!reservationEditId) {
+      setForm(EMPTY_FORM);
+      setLinkedCustomerId(null);
+      setIsClosedBooking(false);
+      setEditReference(null);
+      return;
+    }
+
+    let mounted = true;
+    getBookingRaw(reservationEditId)
+      .then((b) => {
+        if (!mounted) return;
+        setIsClosedBooking(b.status === 'status_checked_out');
+        setEditReference(b.reference || null);
+        setForm({
+          nom: b.guest?.lastName || '',
+          prenom: b.guest?.firstName || '',
+          nationalite: b.guest?.nationality || '',
+          passeport: b.guest?.idNumber || '',
+          email: b.guest?.email || '',
+          telephone: b.guest?.phone || '',
+          arrival: b.checkInDate ? b.checkInDate.slice(0, 10) : '',
+          departure: b.checkOutDate ? b.checkOutDate.slice(0, 10) : '',
+          roomId: b.room?._id || b.room || '',
+          pax: b.pax || 1,
+          regime: b.regime || 'BB',
+          segmentId: b.marketSegment?._id || b.marketSegment || '',
+          taxeSejour: b.cityTax?.mode || 'payable_a_reservation',
+          acompteMontant: b.deposit?.amount ? String(b.deposit.amount) : '',
+          acompteDate: b.deposit?.date ? b.deposit.date.slice(0, 10) : '',
+          commentaires: b.notes || '',
+        });
+        setLinkedCustomerId(b.customer?._id || b.customer || null);
+      })
+      .catch(() => {
+        if (mounted) setErrorMsg('Impossible de charger cette réservation.');
+      });
+
+    return () => { mounted = false; };
+  }, [isReservationOpen, reservationEditId]);
+
+  useEffect(() => {
+    if (form.nom.trim().length < 2) {
+      setClientResults([]);
+      setShowClientDropdown(false);
+      return;
+    }
+    const timeout = setTimeout(async () => {
+      try {
+        const results = await searchClients(form.nom.trim());
+        setClientResults(results);
+        setShowClientDropdown(results.length > 0);
+      } catch {
+        // silencieux
+      }
+    }, 300);
+    return () => clearTimeout(timeout);
+  }, [form.nom]);
+
+  const selectClient = (c: Client) => {
+    setForm((prev) => ({
+      ...prev,
+      nom: c.nom,
+      prenom: c.prenom,
+      email: c.email || prev.email,
+      telephone: c.tel || prev.telephone,
+    }));
+    setLinkedCustomerId(String(c.id));
+    setShowClientDropdown(false);
+  };
+
+  const selectedRoom = rooms.find((r) => r._id === form.roomId);
+  const nights = nightsBetween(form.arrival, form.departure);
+  const basePrice = selectedRoom ? BASE_PRICE_BY_CATEGORY[selectedRoom.category] || 600 : 0;
+  const estimatedTotal = nights * (basePrice + REGIME_SUPPLEMENT[form.regime]);
+
+  const validate = (): string | null => {
+    if (!form.nom.trim()) return 'Le nom est obligatoire.';
+    if (!form.prenom.trim()) return 'Le prénom est obligatoire.';
+    if (!form.arrival) return "La date d'arrivée est obligatoire.";
+    if (!form.departure) return 'La date de départ est obligatoire.';
+    if (form.departure <= form.arrival) return 'La date de départ doit être après la date d\'arrivée.';
+    if (!form.roomId) return 'Veuillez sélectionner une chambre.';
+    if (!form.segmentId) return 'Veuillez sélectionner un segment de marché.';
+    return null;
+  };
+
+  const buildPayload = () => ({
+    room: form.roomId,
+    checkInDate: form.arrival,
+    checkOutDate: form.departure,
+    guest: {
+      lastName: form.nom.trim(),
+      firstName: form.prenom.trim(),
+      nationality: form.nationalite || undefined,
+      idNumber: form.passeport || undefined,
+      email: form.email || undefined,
+      phone: form.telephone || undefined,
+    },
+    marketSegment: form.segmentId,
+    pax: form.pax || 1,
+    regime: form.regime,
+    estimatedTotal,
+    notes: form.commentaires || undefined,
+    cityTax: { mode: form.taxeSejour },
+    deposit: form.acompteMontant
+      ? { amount: Number(form.acompteMontant), date: form.acompteDate || undefined }
+      : undefined,
+  });
+
+  const handleSave = async (status: 'status_option' | 'status_confirmed') => {
+    const validationError = validate();
+    if (validationError) {
+      setErrorMsg(validationError);
+      return;
+    }
+
+    setSaving(true);
+    setErrorMsg(null);
+
+    try {
+      const payload = buildPayload();
+
+      if (isEditMode && reservationEditId) {
+        await updateBookingRaw(reservationEditId, payload);
+        showToast(`✅ Réservation ${reservationEditId} mise à jour.`);
+      } else {
+        const result = await createBooking({ ...payload, status } as any);
+        showToast(`✅ Réservation créée (${result.customerStatus || 'ok'}).`);
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['reservations'] });
+      closeReservation();
+      setForm(EMPTY_FORM);
+    } catch (err: any) {
+      const backendMsg = err?.response?.data?.message;
+      if (err?.response?.status === 409) {
+        setErrorMsg(backendMsg || 'Cette chambre est déjà réservée sur cette période.');
+      } else {
+        setErrorMsg(backendMsg || 'Une erreur est survenue lors de l\'enregistrement.');
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (!isReservationOpen) return null;
 
   return (
-    <div className={`modal fade ${isReservationOpen ? 'show d-block' : ''}`} id="reservationModal" tabIndex={-1} aria-hidden="true" style={{ display: isReservationOpen ? 'block' : undefined }}>
+    <div className="modal fade show d-block" id="reservationModal" tabIndex={-1} style={{ display: 'block' }}>
       <div className="modal-dialog modal-xl modal-dialog-centered">
         <div className="modal-content pms-modal">
           <div className="modal-header pms-modal-header">
-            <h5 className="modal-title"><i className="bi bi-journal-plus me-2" />Nouvelle Réservation</h5>
+            <h5 className="modal-title">
+              <i className="bi bi-journal-plus me-2" />
+              {isEditMode ? `Modifier la Réservation ${editReference || reservationEditId}` : 'Nouvelle Réservation'}
+            </h5>
             <button type="button" className="btn-close btn-close-white" onClick={() => closeReservation()} />
           </div>
+
           <div className="modal-body p-4">
+            {isClosedBooking && (
+              <div className="alert alert-warning mb-3">
+                Ce dossier est clôturé (check-out effectué) : modification impossible.
+              </div>
+            )}
+            {errorMsg && (
+              <div className="alert alert-danger mb-3">{errorMsg}</div>
+            )}
+
             <div className="row g-3">
+              {/* ── Fiche Client ── */}
               <div className="col-lg-6">
                 <div className="modal-section-title mb-2"><i className="bi bi-person-fill me-2" />Fiche Client</div>
                 <div className="row g-2">
-                  <div className="col-6">
-                    <input type="text" className="form-control pms-input" placeholder="Nom *" id="resNom" />
-                    <div className="autocomplete-dropdown d-none" id="clientDropdown" />
+                  <div className="col-6" style={{ position: 'relative' }}>
+                    <input
+                      type="text"
+                      className="form-control pms-input"
+                      placeholder="Nom *"
+                      value={form.nom}
+                      onChange={(e) => { updateField('nom', e.target.value); setLinkedCustomerId(null); }}
+                      onFocus={() => setShowClientDropdown(clientResults.length > 0)}
+                    />
+                    {showClientDropdown && (
+                      <div className="autocomplete-dropdown" style={{
+                        position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 20,
+                        background: 'white', border: '1px solid #e2e8f0', borderRadius: 6,
+                        maxHeight: 160, overflowY: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                      }}>
+                        {clientResults.map((c) => (
+                          <div
+                            key={c.id}
+                            onClick={() => selectClient(c)}
+                            style={{ padding: '8px 12px', cursor: 'pointer', fontSize: '0.85rem' }}
+                            onMouseDown={(e) => e.preventDefault()}
+                          >
+                            {c.nom} {c.prenom} {c.email ? `— ${c.email}` : ''}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
-                  <div className="col-6"><input type="text" className="form-control pms-input" placeholder="Prénom *" /></div>
-                  <div className="col-6"><input type="text" className="form-control pms-input" placeholder="Nationalité" /></div>
-                  <div className="col-6"><input type="text" className="form-control pms-input" placeholder="N° Passeport/CIN" /></div>
-                  <div className="col-6"><input type="email" className="form-control pms-input" placeholder="E-mail" /></div>
-                  <div className="col-6"><input type="tel" className="form-control pms-input" placeholder="Téléphone" /></div>
+                  <div className="col-6">
+                    <input type="text" className="form-control pms-input" placeholder="Prénom *"
+                      value={form.prenom} onChange={(e) => updateField('prenom', e.target.value)} />
+                  </div>
+                  <div className="col-6">
+                    <input type="text" className="form-control pms-input" placeholder="Nationalité"
+                      value={form.nationalite} onChange={(e) => updateField('nationalite', e.target.value)} />
+                  </div>
+                  <div className="col-6">
+                    <input type="text" className="form-control pms-input" placeholder="N° Passeport/CIN"
+                      value={form.passeport} onChange={(e) => updateField('passeport', e.target.value)} />
+                  </div>
+                  <div className="col-6">
+                    <input type="email" className="form-control pms-input" placeholder="E-mail"
+                      value={form.email} onChange={(e) => updateField('email', e.target.value)} />
+                  </div>
+                  <div className="col-6">
+                    <input type="tel" className="form-control pms-input" placeholder="Téléphone"
+                      value={form.telephone} onChange={(e) => updateField('telephone', e.target.value)} />
+                  </div>
+                  {linkedCustomerId && (
+                    <div className="col-12">
+                      <small style={{ color: 'var(--accent)' }}>
+                        <i className="bi bi-link-45deg" /> Lié à une fiche client existante
+                      </small>
+                    </div>
+                  )}
                 </div>
               </div>
+
+              {/* ── Détails du Séjour ── */}
               <div className="col-lg-6">
                 <div className="modal-section-title mb-2"><i className="bi bi-calendar3 me-2" />Détails du Séjour</div>
                 <div className="row g-2">
                   <div className="col-6">
                     <label className="form-label small text-muted">Arrivée *</label>
-                    <input type="date" className="form-control pms-input" id="resArrival" />
+                    <input type="date" className="form-control pms-input"
+                      value={form.arrival} onChange={(e) => updateField('arrival', e.target.value)} />
                   </div>
                   <div className="col-6">
                     <label className="form-label small text-muted">Départ *</label>
-                    <input type="date" className="form-control pms-input" id="resDeparture" />
+                    <input type="date" className="form-control pms-input"
+                      value={form.departure} onChange={(e) => updateField('departure', e.target.value)} />
                   </div>
                   <div className="col-6">
                     <label className="form-label small text-muted">Chambre</label>
-                    <select className="form-select pms-input">
-                      <option>201 — Standard</option>
-                      <option>205 — Suite</option>
-                      <option>310 — Lodge</option>
-                      <option>102 — Standard</option>
-                      <option>308 — Suite Deluxe</option>
+                    <select className="form-select pms-input" value={form.roomId}
+                      onChange={(e) => updateField('roomId', e.target.value)} disabled={loadingRefData}>
+                      <option value="">— Sélectionner —</option>
+                      {rooms.map((r) => (
+                        <option key={r._id} value={r._id}>{r.number} — {r.category}</option>
+                      ))}
                     </select>
                   </div>
                   <div className="col-6">
                     <label className="form-label small text-muted">Nombre de PAX</label>
-                    <input type="number" className="form-control pms-input" defaultValue={2} min={1} />
+                    <input type="number" className="form-control pms-input" min={1}
+                      value={form.pax} onChange={(e) => updateField('pax', Number(e.target.value))} />
                   </div>
                   <div className="col-6">
                     <label className="form-label small text-muted">Régime</label>
-                    <select className="form-select pms-input" id="resRegime">
+                    <select className="form-select pms-input" value={form.regime}
+                      onChange={(e) => updateField('regime', e.target.value)}>
                       <option value="BB">BB — Bed &amp; Breakfast</option>
                       <option value="DP">DP — Demi-Pension (+220 DH)</option>
                       <option value="PC">PC — Pension Complète (+420 DH)</option>
@@ -69,48 +395,82 @@ export function ReservationModal() {
                   </div>
                   <div className="col-6">
                     <label className="form-label small text-muted">Segment marché</label>
-                    <select className="form-select pms-input">
-                      <option>Direct — Téléphone/Mail</option>
-                      <option>Direct — Walk-in</option>
-                      <option>Direct — Site web</option>
-                      <option>OTA — Booking.com</option>
-                      <option>OTA — Expedia</option>
-                      <option>OTA — Airbnb</option>
-                      <option>B2B — Agence / TO</option>
-                      <option>B2B — Corporate</option>
+                    <select className="form-select pms-input" value={form.segmentId}
+                      onChange={(e) => updateField('segmentId', e.target.value)} disabled={loadingRefData}>
+                      <option value="">— Sélectionner —</option>
+                      {segments.map((s) => (
+                        <option key={s._id} value={s._id}>{s.label}</option>
+                      ))}
                     </select>
                   </div>
                 </div>
               </div>
+
+              {/* ── Taxe de séjour ── */}
               <div className="col-lg-6">
                 <div className="modal-section-title mb-2"><i className="bi bi-receipt me-2" />Taxe de Séjour</div>
                 <div className="d-flex gap-4">
-                  <label className="radio-option"><input type="radio" name="ts" value="resa" defaultChecked /> Payable à la réservation</label>
-                  <label className="radio-option"><input type="radio" name="ts" value="place" /> Payable sur place (Extra)</label>
+                  <label className="radio-option">
+                    <input type="radio" name="ts" value="payable_a_reservation"
+                      checked={form.taxeSejour === 'payable_a_reservation'}
+                      onChange={() => updateField('taxeSejour', 'payable_a_reservation')} />
+                    {' '}Payable à la réservation
+                  </label>
+                  <label className="radio-option">
+                    <input type="radio" name="ts" value="payable_sur_place"
+                      checked={form.taxeSejour === 'payable_sur_place'}
+                      onChange={() => updateField('taxeSejour', 'payable_sur_place')} />
+                    {' '}Payable sur place (Extra)
+                  </label>
                 </div>
               </div>
+
+              {/* ── Acompte ── */}
               <div className="col-lg-6">
                 <div className="modal-section-title mb-2"><i className="bi bi-cash me-2" />Acompte</div>
                 <div className="row g-2">
-                  <div className="col-6"><input type="number" className="form-control pms-input" placeholder="Montant acompte (DH)" /></div>
-                  <div className="col-6"><input type="date" className="form-control pms-input" placeholder="Date limite" /></div>
+                  <div className="col-6">
+                    <input type="number" className="form-control pms-input" placeholder="Montant acompte (DH)"
+                      value={form.acompteMontant} onChange={(e) => updateField('acompteMontant', e.target.value)} />
+                  </div>
+                  <div className="col-6">
+                    <input type="date" className="form-control pms-input"
+                      value={form.acompteDate} onChange={(e) => updateField('acompteDate', e.target.value)} />
+                  </div>
                 </div>
               </div>
+
               <div className="col-12">
                 <div className="res-total-bar">
-                  <span>Total estimé (HT + TVA) :</span>
-                  <span className="res-total-val">3 000 DH</span>
+                  <span>Total estimé (indicatif) :</span>
+                  <span className="res-total-val">{estimatedTotal.toLocaleString('fr-FR')} DH</span>
                 </div>
               </div>
+
               <div className="col-12">
-                <textarea className="form-control pms-input" rows={2} placeholder="Commentaires / Demandes spéciales (ex: chambre à l'étage, lit bébé, allergies…)" />
+                <textarea className="form-control pms-input" rows={2}
+                  placeholder="Commentaires / Demandes spéciales (ex: chambre à l'étage, lit bébé, allergies…)"
+                  value={form.commentaires} onChange={(e) => updateField('commentaires', e.target.value)} />
               </div>
             </div>
           </div>
+
           <div className="modal-footer pms-modal-footer">
-            <button className="btn btn-ghost" onClick={() => closeReservation()}>Annuler</button>
-            <button className="btn btn-outline-accent" onClick={() => { closeReservation(); }}><i className="bi bi-clock me-1" />Enregistrer en Option</button>
-            <button className="btn btn-pms" onClick={() => { closeReservation(); }}><i className="bi bi-check-circle me-1" />Confirmer la Réservation</button>
+            <button className="btn btn-ghost" onClick={() => closeReservation()} disabled={saving}>
+              Annuler
+            </button>
+            {!isEditMode && (
+              <button className="btn btn-outline-accent" disabled={saving || isClosedBooking}
+                onClick={() => handleSave('status_option')}>
+                <i className="bi bi-clock me-1" />
+                {saving ? 'Enregistrement…' : 'Enregistrer en Option'}
+              </button>
+            )}
+            <button className="btn btn-pms" disabled={saving || isClosedBooking}
+              onClick={() => handleSave('status_confirmed')}>
+              <i className="bi bi-check-circle me-1" />
+              {saving ? 'Enregistrement…' : isEditMode ? 'Enregistrer les modifications' : 'Confirmer la Réservation'}
+            </button>
           </div>
         </div>
       </div>
@@ -146,8 +506,10 @@ export function RoomModal() {
       queryClient.invalidateQueries({ queryKey: ['rooms'] });
       showToast(`✅ Statut de la chambre ${selectedRoomId} mis à jour vers ${localStatus}`);
       closeRoom();
-    } catch (error) {
-      showToast('⚠️ Impossible de mettre à jour le statut de la chambre.');
+    } catch (err: any) {
+      const data = err?.response?.data;
+      const msg = data?.body ? `${data.message} — ${JSON.stringify(data.body)}` : data?.message;
+      showToast(`⚠️ ${msg || 'Impossible de mettre à jour le statut de la chambre.'}`);
     }
   };
 
@@ -171,7 +533,6 @@ export function RoomModal() {
               <option value="propre">Propre</option>
               <option value="controlee">Contrôlée</option>
               <option value="bloquee">Bloquée</option>
-              <option value="inhouse">In-House</option>
             </select>
             {localStatus === 'bloquee' && (
               <div>
@@ -181,10 +542,10 @@ export function RoomModal() {
                   value={localReason}
                   onChange={(e) => setLocalReason(e.target.value)}
                 >
-                  <option value="Day Use">Day Use</option>
-                  <option value="Problème technique">Problème technique</option>
-                  <option value="Départ tardif">Départ tardif</option>
-                  <option value="Travaux / Rénovation">Travaux / Rénovation</option>
+                  <option value="day_use">Day Use</option>
+                  <option value="probleme_technique">Problème technique</option>
+                  <option value="depart_tardif">Départ tardif</option>
+                  <option value="travaux">Travaux / Rénovation</option>
                 </select>
               </div>
             )}
