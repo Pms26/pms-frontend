@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════
 // OASIS PMS — Housekeeping API
 // Backend: service-housekeeping (port 4002) via gateway
-// Routes: GET /api/rooms, PATCH /api/rooms/:id/status
+// Routes: GET /api/rooms, PATCH /api/rooms/numero/:numero/status
 // ═══════════════════════════════════════════════════════════
 
 import apiClient, { USE_MOCKS, mockDelay } from './client';
@@ -40,7 +40,7 @@ const STATUS_MAP_FE_TO_BE: Record<string, string> = {
   propre: 'propre',
   controlee: 'controlee',
   bloquee: 'bloquee',
-  nettoyage_en_cours: 'nettoyage_en_cours',
+  encours: 'nettoyage_en_cours',
 };
 
 export async function getRooms(statusFilter?: HousekeepingStatus): Promise<Room[]> {
@@ -55,8 +55,8 @@ export async function getRooms(statusFilter?: HousekeepingStatus): Promise<Room[
   const roomsRaw = data.rooms || data;
 
   const rooms: Room[] = roomsRaw.map((r: any) => ({
-    id: r.id || r.numero || r.roomNumber,
-    roomNumber: r.numero || r.roomNumber || r.id,
+    id: r.number || r.numero || r.roomNumber || r.id,
+    type: CATEGORY_MAP_BE_TO_FE[r.categorie || r.category] || r.categorie || r.category || 'Standard',
     category: (r.categorie || r.category || 'standard') as Room['category'],
     floor: r.etage || r.floor || 1,
     bedType: r.typeDeLit || r.bedType || 'double',
@@ -70,44 +70,59 @@ export async function getRooms(statusFilter?: HousekeepingStatus): Promise<Room[
 }
 
 export async function updateRoomStatus(
-  roomId: string,
-  status: HousekeepingStatus,
+  roomNumber: string,
+  status: RoomStatus,
   reason?: string,
 ): Promise<{ success: boolean; room: Room }> {
   if (USE_MOCKS) {
     await mockDelay(500);
-    const idx = MOCK_ROOMS.findIndex((r) => r.id === roomId);
-    if (idx === -1) throw new Error(`Chambre ${roomId} introuvable`);
-    const updated = {
-      ...MOCK_ROOMS[idx],
-      housekeepingStatus: status,
-      blockReason: status === 'bloquee' ? reason ?? null : null,
-    };
+    const idx = MOCK_ROOMS.findIndex((r) => r.id === roomNumber);
+    if (idx === -1) throw new Error(`Chambre ${roomNumber} introuvable`);
+    const updated = { ...MOCK_ROOMS[idx], status, reason: status === 'bloquee' ? reason : undefined };
     MOCK_ROOMS[idx] = updated;
     return { success: true, room: updated };
   }
 
-  const res = await apiClient.patch(`/api/housekeeping/rooms/${roomId}/status`, {
-    housekeepingStatus: STATUS_MAP_FE_TO_BE[status] || status,
-    blockReason: status === 'bloquee' ? reason : undefined,
+  const res = await apiClient.patch(`/api/housekeeping/rooms/numero/${roomNumber}/status`, {
+    statut: STATUS_MAP_FE_TO_BE[status] || status,
+    motifBlocage: status === 'bloquee' ? reason : undefined,
   });
   const data = res.data;
   return {
     success: true,
     room: {
-      id: data.room?.id || data.room?.numero || data.room?.roomNumber || roomId,
-      roomNumber: data.room?.numero || data.room?.roomNumber || roomId,
-      category: (data.room?.categorie || data.room?.category || 'standard') as Room['category'],
-      floor: data.room?.etage || data.room?.floor || 1,
-      bedType: data.room?.typeDeLit || data.room?.bedType || 'double',
-      maxOccupancy: data.room?.capacite || data.room?.maxOccupancy || 2,
-      housekeepingStatus: status,
-      blockReason: data.room?.motifBlocage || data.room?.blockReason || null,
+      id: data.number || data.numero || data.roomNumber || roomNumber,
+      type: CATEGORY_MAP_BE_TO_FE[data.categorie || data.category] || 'Standard',
+      category: (data.categorie || data.category || 'standard') as Room['category'],
+      floor: data.etage || data.floor || 1,
+      status,
+      reason: data.motifBlocage || data.blockReason,
     },
   };
 }
 
-export async function getRoomsSummary(): Promise<Record<HousekeepingStatus, number>> {
+export async function checkoutRoom(roomNumber: string): Promise<{ message: string; room: Room }> {
+  const res = await apiClient.patch(`/api/housekeeping/rooms/numero/${roomNumber}/checkout`);
+  const data = res.data;
+  return {
+    message: data.message,
+    room: {
+      id: data.room?.number || data.room?.numero || data.room?.roomNumber || roomNumber,
+      type: CATEGORY_MAP_BE_TO_FE[data.room?.categorie || data.room?.category] || 'Standard',
+      category: (data.room?.categorie || data.room?.category || 'standard') as Room['category'],
+      floor: data.room?.etage || data.room?.floor || 1,
+      status: 'sale',
+      reason: undefined,
+    },
+  };
+}
+
+export async function triggerNightAudit(): Promise<{ message: string; chambresModifiees: number }> {
+  const res = await apiClient.post('/api/housekeeping/rooms/night-audit');
+  return res.data;
+}
+
+export async function getRoomsSummary(): Promise<Record<RoomStatus, number>> {
   if (USE_MOCKS) {
     await mockDelay(200);
     const summary: Record<string, number> = {};
@@ -122,5 +137,5 @@ export async function getRoomsSummary(): Promise<Record<HousekeepingStatus, numb
   for (const room of rooms) {
     summary[room.housekeepingStatus] = (summary[room.housekeepingStatus] || 0) + 1;
   }
-  return summary as Record<HousekeepingStatus, number>;
+  return summary as Record<RoomStatus, number>;
 }

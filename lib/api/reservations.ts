@@ -1,8 +1,4 @@
-// ═══════════════════════════════════════════════════════════
-// OASIS PMS — Reservations API
-// Backend: service-reservations (port 4003) via gateway
-// Routes: GET/POST /api/bookings, GET /api/customers/search
-// ═══════════════════════════════════════════════════════════
+
 
 import apiClient, { USE_MOCKS, mockDelay } from './client';
 import type { Reservation, ReservationStatus, MarketSegment, MealPlan, Client } from '@/types';
@@ -47,12 +43,16 @@ const STATUS_FE_TO_BE: Record<string, string> = {
 };
 
 const SEGMENT_BE_TO_FE: Record<string, MarketSegment> = {
-  direct: 'direct',
-  walk_in: 'direct',
-  ota: 'ota',
-  b2b: 'b2b',
-  corporate: 'b2b',
-  agency: 'b2b',
+  direct_walk_in: 'direct',
+  direct_phone_mail: 'direct',
+  direct_website: 'direct',
+  ota_booking: 'ota',
+  ota_expedia: 'ota',
+  ota_hotels: 'ota',
+  ota_agoda: 'ota',
+  ota_airbnb: 'ota',
+  b2b_agency: 'b2b',
+  b2b_corporate: 'b2b',
 };
 
 const REGIME_BE_TO_FE: Record<string, MealPlan> = {
@@ -60,8 +60,10 @@ const REGIME_BE_TO_FE: Record<string, MealPlan> = {
 };
 
 function mapBookingToFrontend(b: any): Reservation {
-  const customerName = b.customer
-    ? `${b.customer.lastName || ''} ${b.customer.firstName || ''}`.trim()
+  const customer = b.customer && typeof b.customer === 'object' ? b.customer : null;
+
+  const customerName = customer?.lastName
+    ? `${customer.lastName} ${customer.firstName || ''}`.trim()
     : b.guest?.lastName
     ? `${b.guest.lastName} ${b.guest.firstName || ''}`.trim()
     : 'Client inconnu';
@@ -71,16 +73,17 @@ function mapBookingToFrontend(b: any): Reservation {
   const rawStatus = b.status || 'status_option';
 
   return {
-    id: b._id || b.reference || b.id,
+    id: b._id || b.id,
+    reference: b.reference || b._id || b.id,
     client: customerName,
     room: String(roomNumber),
     arrival: b.checkInDate ? b.checkInDate.slice(0, 10) : '',
     departure: b.checkOutDate ? b.checkOutDate.slice(0, 10) : '',
-    regime: REGIME_BE_TO_FE[b.boardType] || 'BB',
+    regime: REGIME_BE_TO_FE[b.regime] || 'BB',
     segment: SEGMENT_BE_TO_FE[segmentCode] || 'direct',
     status: STATUS_BE_TO_FE[rawStatus] || 'option',
     total: b.totalAmount != null ? `${Number(b.totalAmount).toLocaleString('fr-FR')} DH` : '0 DH',
-    pax: b.adults ? b.adults + (b.children || 0) : undefined,
+    pax: b.pax || undefined,
     notes: b.notes || undefined,
   };
 }
@@ -209,4 +212,113 @@ export async function searchClients(query: string): Promise<Client[]> {
     tel: c.phone || c.tel || '',
     notes: c.notes || undefined,
   }));
+}
+
+export interface BookingRoom {
+  _id: string;
+  number: string;
+  category: string;
+  capacity: number;
+  isActive: boolean;
+}
+
+export async function getRoomsForBooking(): Promise<BookingRoom[]> {
+  const res = await apiClient.get('/api/reservations/rooms');
+  const rooms = Array.isArray(res.data) ? res.data : res.data.rooms || [];
+  return rooms.filter((r: BookingRoom) => r.isActive !== false);
+}
+
+
+export interface BookingMarketSegment {
+  _id: string;
+  code: string;
+  label: string;
+  category: string;
+}
+
+export async function getMarketSegmentsList(): Promise<BookingMarketSegment[]> {
+  const res = await apiClient.get('/api/reservations/market-segments');
+  return Array.isArray(res.data) ? res.data : res.data.segments || [];
+}
+
+
+export async function getBookingRaw(id: string): Promise<any> {
+  const res = await apiClient.get(`/api/reservations/bookings/${id}`);
+  return res.data;
+}
+
+
+export interface CreateBookingPayload {
+  room: string;                
+  checkInDate: string;         
+  checkOutDate: string;        
+  guest: {
+    lastName: string;          
+    firstName: string;         
+    nationality?: string;
+    idNumber?: string;
+    email?: string;
+    phone?: string;
+  };
+  marketSegment: string;       
+  pax?: number;
+  regime?: 'BB' | 'DP' | 'PC';
+  estimatedTotal: number;      
+  notes?: string;
+  cityTax?: { mode: 'payable_a_reservation' | 'payable_sur_place' };
+  deposit?: { amount: number; date?: string };
+}
+
+export async function createBooking(payload: CreateBookingPayload): Promise<any> {
+  const res = await apiClient.post('/api/reservations/bookings', payload);
+  return res.data; 
+}
+
+export async function updateBookingRaw(id: string, payload: Partial<CreateBookingPayload>): Promise<any> {
+  const res = await apiClient.put(`/api/reservations/bookings/${id}`, payload);
+  return res.data;
+}
+
+export async function changeBookingStatus(id: string, status: string): Promise<any> {
+  const res = await apiClient.patch(`/api/reservations/bookings/${id}/status`, { status });
+  return res.data;
+}
+
+export async function shiftBooking(id: string, newRoomId: string, newEstimatedTotal?: number): Promise<any> {
+  const res = await apiClient.patch(`/api/reservations/bookings/${id}/shift`, {
+    newRoomId,
+    ...(newEstimatedTotal ? { newEstimatedTotal } : {}),
+  });
+  return res.data;
+}
+
+export async function cancelBooking(id: string): Promise<any> {
+  const res = await apiClient.delete(`/api/reservations/bookings/${id}`);
+  return res.data;
+}
+
+export interface PaymentAlert {
+  _id: string;
+  reference: string;
+  guest?: { lastName: string; firstName: string };
+  customer?: { lastName: string; firstName: string };
+  room?: { number: string };
+  status: string;
+  paymentDueDate?: string;
+  optionExpiryDate?: string;
+  totalAmount: number;
+}
+
+export async function getPaymentAlerts(): Promise<PaymentAlert[]> {
+  const res = await apiClient.get('/api/reservations/bookings/payment-alerts');
+  return Array.isArray(res.data) ? res.data : res.data.alerts || [];
+}
+
+export async function releaseExpiredOptions(): Promise<any> {
+  const res = await apiClient.post('/api/reservations/bookings/release-expired');
+  return res.data;
+}
+export async function checkPaymentAlerts(): Promise<any> {
+  const res = await apiClient.post('/api/reservations/bookings/check-payment-alerts');
+  return res.data;
 }

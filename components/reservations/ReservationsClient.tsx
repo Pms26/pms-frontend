@@ -1,13 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { changeBookingStatus, cancelBooking } from '@/lib/api/reservations';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getReservations } from '@/lib/api/reservations';
 import type { Reservation, ReservationStatus, MarketSegment } from '@/types';
 import { useSearchParams } from 'next/navigation';
 import PlanningGrid from '@/components/planning/PlanningGrid';
 import { useModalToast } from '@/components/context/ModalToastContext';
-
+import PaymentAlertsPanel from '@/components/reservations/PaymentAlertsPanel';
+import { useAuthStore } from '@/lib/auth/AuthContext';
+import { getRoomsForBooking, shiftBooking, releaseExpiredOptions, type BookingRoom } from '@/lib/api/reservations';
 // CSS classes du mockup pour les badges de statut
 const STATUS_CSS: Record<ReservationStatus, string> = {
   option:    'status-badge status-option',
@@ -35,6 +39,8 @@ const SEGMENT_LABELS: Record<MarketSegment, string> = {
   b2b:    'B2B / Agence',
 };
 
+const OVERRIDE_ROLES = ['admin', 'manager'];
+
 // Format date from ISO (YYYY-MM-DD) to DD/MM/YYYY
 function formatDate(isoDate: string): string {
   if (!isoDate) return '';
@@ -51,6 +57,112 @@ export default function ReservationsClient() {
   const view = searchParams?.get('view') || '';
 
   const { openReservation, showToast } = useModalToast();
+
+  const queryClient = useQueryClient();
+  const [rooms, setRooms] = useState<BookingRoom[]>([]);
+
+  const user = useAuthStore((s) => s.user);
+  const canOverride = OVERRIDE_ROLES.includes(user?.role || '');
+
+  useEffect(() => {
+    getRoomsForBooking().then(setRooms).catch(() => {});
+  }, []);
+
+  const handleStatusChange = async (id: string, newStatus: string) => {
+    try {
+      await changeBookingStatus(id, newStatus);
+      queryClient.invalidateQueries({ queryKey: ['reservations'] });
+      showToast(`✅ Statut de ${id} mis à jour.`);
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || 'Impossible de changer le statut.';
+      showToast(`⚠️ ${msg}`);
+    }
+  };
+
+  const handleCancel = async (id: string) => {
+    if (!window.confirm(`Annuler la réservation ${id} ? Cette action est réversible en changeant à nouveau le statut.`)) {
+      return;
+    }
+    try {
+      await cancelBooking(id);
+      queryClient.invalidateQueries({ queryKey: ['reservations'] });
+      showToast(`✅ Réservation ${id} annulée.`);
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || 'Impossible d\'annuler cette réservation.';
+      showToast(`⚠️ ${msg}`);
+    }
+  };
+
+  const handleShift = async (id: string, newRoomId: string) => {
+    if (!newRoomId) return;
+    if (!window.confirm('Confirmer le déplacement vers cette chambre ?')) return;
+
+    try {
+      const result = await shiftBooking(id, newRoomId);
+      queryClient.invalidateQueries({ queryKey: ['reservations'] });
+      showToast(result?.message ? `✅ ${result.message}` : `✅ Réservation ${id} déplacée.`);
+    } catch (err: any) {
+      if (err?.response?.status === 403 && err?.response?.data?.requiresAdminOverride) {
+        showToast(`⛔ ${err.response.data.message} — droits admin/manager requis.`);
+      } else {
+        const msg = err?.response?.data?.message || 'Impossible de déplacer cette réservation.';
+        showToast(`⚠️ ${msg}`);
+      }
+    }
+  };
+
+  const handleReleaseExpired = async () => {
+    if (!window.confirm('Libérer toutes les options expirées ? Cette action est irréversible.')) return;
+    try {
+      const result = await releaseExpiredOptions();
+      queryClient.invalidateQueries({ queryKey: ['reservations'] });
+      showToast(`✅ ${result?.message || 'Options expirées libérées.'}`);
+    } catch (err: any) {
+      const msg = err?.response?.data?.message || 'Impossible de libérer les options expirées.';
+      showToast(`⚠️ ${msg}`);
+    }
+  };
+
+  const handlePrint = (r: Reservation) => {
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
+    if (!printWindow) {
+      showToast('⚠️ Autorise les pop-ups pour imprimer.');
+      return;
+    }
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Réservation ${r.reference || r.id}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 40px; color: #1e293b; }
+            h1 { color: #4f46e5; border-bottom: 2px solid #4f46e5; padding-bottom: 8px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+            td { padding: 8px 0; border-bottom: 1px solid #e2e8f0; }
+            td:first-child { font-weight: 600; width: 200px; color: #64748b; }
+          </style>
+        </head>
+        <body>
+          <h1>Bon de Réservation ${r.reference || r.id}</h1>
+          <table>
+            <tr><td>Client</td><td>${r.client}</td></tr>
+            <tr><td>Chambre</td><td>${r.room}</td></tr>
+            <tr><td>Arrivée</td><td>${formatDate(r.arrival)}</td></tr>
+            <tr><td>Départ</td><td>${formatDate(r.departure)}</td></tr>
+            <tr><td>Régime</td><td>${r.regime}</td></tr>
+            <tr><td>Segment</td><td>${SEGMENT_LABELS[r.segment]}</td></tr>
+            <tr><td>Statut</td><td>${STATUS_LABELS[r.status]}</td></tr>
+            <tr><td>Total</td><td>${r.total}</td></tr>
+            ${r.pax ? `<tr><td>PAX</td><td>${r.pax}</td></tr>` : ''}
+            ${r.notes ? `<tr><td>Commentaires</td><td>${r.notes}</td></tr>` : ''}
+          </table>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+  };
 
   const { data: reservations, isLoading } = useQuery({
     queryKey: ['reservations', search, statusFilter, segmentFilter],
@@ -71,11 +183,19 @@ export default function ReservationsClient() {
     <div>
       {/* ── Section Header ── */}
       <div className="section-header">
-        <h2 className="section-title">Réservations</h2>
-        <button className="btn btn-pms" onClick={() => openReservation()}>
-          <i className="bi bi-plus-lg me-1" />Nouvelle réservation
-        </button>
-      </div>
+  <h2 className="section-title">Réservations</h2>
+  <div className="d-flex gap-2 align-items-center">
+    <PaymentAlertsPanel />
+    {canOverride && (
+      <button className="btn btn-outline-secondary" title="Libérer les options expirées" onClick={handleReleaseExpired}>
+        <i className="bi bi-hourglass-split me-1" />Libérer les options expirées
+      </button>
+    )}
+    <button className="btn btn-pms" onClick={() => openReservation()}>
+      <i className="bi bi-plus-lg me-1" />Nouvelle réservation
+    </button>
+  </div>
+</div>
 
       {/* ── Filters ── */}
       <div className="glass-card p-3 mb-3">
@@ -165,43 +285,114 @@ export default function ReservationsClient() {
                   </td>
                 </tr>
               ) : (
-                reservations?.map((r: Reservation) => (
-                  <tr key={r.id}>
-                    <td>
-                      <span style={{ fontFamily: 'monospace', fontSize: '0.78rem', color: 'var(--accent)', fontWeight: 600 }}>
-                        {r.id}
-                      </span>
-                    </td>
-                    <td style={{ fontWeight: 600 }}>{r.client}</td>
-                    <td>Ch. {r.room}</td>
-                    <td>{formatDate(r.arrival)}</td>
-                    <td>{formatDate(r.departure)}</td>
-                    <td>
-                      <span className="status-badge" style={{ background: 'rgba(99,102,241,0.1)', color: '#4f46e5', border: '1px solid rgba(99,102,241,0.2)' }}>
-                        {r.regime}
-                      </span>
-                    </td>
-                    <td>
-                      <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 500 }}>
-                        {SEGMENT_LABELS[r.segment]}
-                      </span>
-                    </td>
-                    <td>
-                      <span className={STATUS_CSS[r.status]}>
-                        <i className="bi bi-circle-fill" style={{ fontSize: '0.4rem' }} />
-                        {STATUS_LABELS[r.status]}
-                      </span>
-                    </td>
-                    <td style={{ fontWeight: 700 }}>{r.total}</td>
-                    <td>
-                      <div className="d-flex gap-1">
-                        <button className="action-btn" title="Voir" onClick={() => showToast(`Ouverture du dossier ${r.id}`)}><i className="bi bi-eye" /></button>
-                        <button className="action-btn" title="Modifier" onClick={() => { openReservation(); showToast(`Édition de ${r.id}`); }}><i className="bi bi-pencil" /></button>
-                        <button className="action-btn" title="Imprimer" onClick={() => showToast(`Impression de ${r.id}`)}><i className="bi bi-printer" /></button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                reservations?.map((r: Reservation) => {
+                  const currentRoom = rooms.find((room) => room.number === r.room);
+                  const sameCategoryRooms = rooms.filter(
+                    (room) => room.number !== r.room && room.category === currentRoom?.category,
+                  );
+                  const otherCategoryRooms = rooms.filter(
+                    (room) => room.number !== r.room && room.category !== currentRoom?.category,
+                  );
+
+                  return (
+                    <tr key={r.id}>
+                      <td>
+                        <span style={{ fontFamily: 'monospace', fontSize: '0.78rem', color: 'var(--accent)', fontWeight: 600 }}>
+                          {r.reference || r.id}
+                        </span>
+                      </td>
+                      <td style={{ fontWeight: 600 }}>{r.client}</td>
+                      <td>Ch. {r.room}</td>
+                      <td>{formatDate(r.arrival)}</td>
+                      <td>{formatDate(r.departure)}</td>
+                      <td>
+                        <span className="status-badge" style={{ background: 'rgba(99,102,241,0.1)', color: '#4f46e5', border: '1px solid rgba(99,102,241,0.2)' }}>
+                          {r.regime}
+                        </span>
+                      </td>
+                      <td>
+                        <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 500 }}>
+                          {SEGMENT_LABELS[r.segment]}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={STATUS_CSS[r.status]}>
+                          <i className="bi bi-circle-fill" style={{ fontSize: '0.4rem' }} />
+                          {STATUS_LABELS[r.status]}
+                        </span>
+                      </td>
+                      <td style={{ fontWeight: 700 }}>{r.total}</td>
+                      <td>
+                        <div className="d-flex gap-1">
+                          <button className="action-btn" title="Voir" onClick={() => openReservation(r.id)}>
+                            <i className="bi bi-eye" />
+                          </button>
+                          <button className="action-btn" title="Modifier" onClick={() => openReservation(r.id)}>
+                            <i className="bi bi-pencil" />
+                          </button>
+                          {r.status !== 'checkout' && r.status !== 'cancelled' && (
+                            <select
+                              className="form-select form-select-sm"
+                              style={{ width: 'auto', fontSize: '0.75rem', padding: '2px 6px' }}
+                              value=""
+                              onChange={(e) => {
+                                if (e.target.value) handleStatusChange(r.id, e.target.value);
+                              }}
+                              title="Changer le statut"
+                            >
+                              <option value="">Statut…</option>
+                              <option value="status_option">Option</option>
+                              <option value="status_confirmed">Confirmée</option>
+                              <option value="status_voucher">Garantie Agence</option>
+                              <option value="status_checked_in">In-House</option>
+                            </select>
+                          )}
+                          {r.status !== 'checkout' && r.status !== 'cancelled' && (
+                            <select
+                              className="form-select form-select-sm"
+                              style={{ width: 'auto', fontSize: '0.75rem', padding: '2px 6px' }}
+                              value=""
+                              onChange={(e) => {
+                                const roomId = e.target.value;
+                                e.target.value = '';
+                                if (roomId) handleShift(r.id, roomId);
+                              }}
+                              title="Déplacer vers une autre chambre"
+                            >
+                              <option value="">Déplacer…</option>
+                              {sameCategoryRooms.length > 0 && (
+                                <optgroup label="Même catégorie">
+                                  {sameCategoryRooms.map((room) => (
+                                    <option key={room._id} value={room._id}>
+                                      {room.number} — {room.category}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              )}
+                              {otherCategoryRooms.length > 0 && (
+                                <optgroup label={canOverride ? 'Autre catégorie (admin/manager)' : 'Autre catégorie — réservé admin/manager'}>
+                                  {otherCategoryRooms.map((room) => (
+                                    <option key={room._id} value={room._id} disabled={!canOverride}>
+                                      {room.number} — {room.category}{!canOverride ? ' 🔒' : ''}
+                                    </option>
+                                  ))}
+                                </optgroup>
+                              )}
+                            </select>
+                          )}
+                          {r.status !== 'checkout' && r.status !== 'cancelled' && (
+                            <button className="action-btn" title="Annuler" onClick={() => handleCancel(r.id)}>
+                              <i className="bi bi-x-circle" style={{ color: '#ef4444' }} />
+                            </button>
+                          )}
+                          <button className="action-btn" title="Imprimer" onClick={() => handlePrint(r)}>
+                            <i className="bi bi-printer" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
