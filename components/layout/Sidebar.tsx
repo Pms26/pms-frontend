@@ -83,15 +83,19 @@ function SidebarNavContent({ collapsed }: { collapsed: boolean }) {
   const gestionItems =
     role === 'admin' ? [...GESTION_ITEMS, ...ADMIN_ITEMS] : GESTION_ITEMS;
 
-  const exploitationItems = EXPLOITATION_ITEMS.filter((item) => {
-    if (item.href === '/dashboard') {
-      return role === 'admin' || role === 'manager' || role === 'comptable';
-    }
-    if (isComptable) {
-      return item.href === '/dashboard' || item.href === '/front-office/check-in';
-    }
-    return true;
-  });
+    const exploitationItems = EXPLOITATION_ITEMS.filter((item) => {
+      if (item.href === '/dashboard') {
+        return role === 'admin' || role === 'manager' || role === 'comptable';
+      }
+      if (isComptable) {
+        return item.href === '/dashboard' || item.href === '/front-office/check-in';
+      }
+      
+      if (role === 'housekeeping_supervisor' && item.href.startsWith('/reservations')) {
+        return false;
+      }
+      return true;
+    });
 
   const filteredGestionItems = gestionItems.filter((item) => {
     if (item.href === '/analytics') {
