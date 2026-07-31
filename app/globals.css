@@ -614,8 +614,7 @@ a:hover { color: var(--accent-2); }
   border-radius: var(--radius-sm);
   padding: 4px;
   width: fit-content;
-}
-.fo-tab {
+}.fo-tab {
   padding: 0.5rem 1.2rem;
   border-radius: 6px;
   cursor: pointer;
@@ -632,8 +631,17 @@ a:hover { color: var(--accent-2); }
   box-shadow: 0 2px 12px var(--accent-glow);
 }
 
+/* Front office panel */
+.fo-panel {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1.5rem;
+}
+
 /* Folio */
 .folio-tabs { display: flex; gap: 4px; }
+.folio-header { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
 .folio-tab {
   padding: 6px 16px; border-radius: 6px;
   border: 1px solid var(--border);
@@ -701,6 +709,29 @@ a:hover { color: var(--accent-2); }
   font-weight: 800;
   font-size: 1rem;
   color: var(--accent);
+}
+
+/* Checkout stat cards */
+.stat-card {
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 1rem;
+}
+.stat-label {
+  font-size: 0.72rem; font-weight: 500; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.stat-value { font-size: 1.15rem; font-weight: 800; color: var(--text-primary); line-height: 1.2; }
+.stat-card-danger .stat-value { color: #b91c1c; }
+
+.alert-success {
+  background: rgba(16,185,129,0.1);
+  border: 1px solid rgba(16,185,129,0.25);
+  border-radius: var(--radius-sm);
+  color: #059669;
+  font-size: 0.82rem; padding: 0.6rem 1rem;
+  display: flex; align-items: center;
 }
 
 .payment-modes .pay-mode-card {

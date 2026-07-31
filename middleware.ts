@@ -19,7 +19,10 @@ const ROLE_RESTRICTIONS: Record<string, string[]> = {
   '/dashboard': ['admin', 'manager', 'comptable'],
   '/night-audit': ['admin', 'manager', 'comptable'],
   '/night-audit/history': ['admin', 'manager', 'comptable'],
-  '/front-office': ['admin', 'manager', 'receptionist', 'comptable'],
+  '/front-office': ['admin', 'manager', 'receptionist', 'housekeeping_supervisor', 'comptable'],
+  '/front-office/check-in': ['admin', 'manager', 'receptionist', 'housekeeping_supervisor'],
+  '/front-office/check-out': ['admin', 'manager', 'receptionist'],
+  '/front-office/payments': ['admin', 'manager', 'receptionist', 'housekeeping_supervisor', 'comptable'],
   '/tarification': ['admin', 'manager', 'receptionist', 'comptable'],
   '/analytics': ['admin', 'manager', 'comptable'],
   '/users': ['admin'],
@@ -28,6 +31,9 @@ const ROLE_RESTRICTIONS: Record<string, string[]> = {
   '/reservations': ['admin', 'manager', 'receptionist'],
   '/housekeeping': ['admin', 'manager', 'housekeeping_supervisor', 'receptionist']
 };
+
+const pathMatches = (restrictedPath: string, pathname: string) =>
+  pathname === restrictedPath || pathname.startsWith(restrictedPath + '/');
 
 const decodeTokenPayload = (token: string) => {
   const payloadPart = token.split('.')[1];
@@ -78,7 +84,7 @@ export function middleware(request: NextRequest) {
       ROLE_RESTRICTIONS
     )) {
       if (
-        pathname.startsWith(restrictedPath) &&
+        pathMatches(restrictedPath, pathname) &&
         !allowedRoles.includes(role)
       ) {
         const homePage = ROLE_HOME_PAGES[role] || '/login';

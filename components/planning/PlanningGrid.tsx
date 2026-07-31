@@ -4,17 +4,21 @@ import { useEffect, useState } from 'react';
 import { getRooms } from '@/lib/api/housekeeping';
 import { getReservations } from '@/lib/api/reservations';
 import { useModalToast } from '@/components/context/ModalToastContext';
+import type { Room } from '@/types';
 
 const STATUS_COLORS_PLAN: Record<string, string> = {
   option: '#6366f1', confirmed: '#10b981', voucher: '#f59e0b',
   inhouse: '#06b6d4', checkout: '#6b7280', noshow: '#ef4444', cancelled: '#374151'
 };
 
-interface Room {
-  id: string;
-  type: string;
-  status: string;
-}
+const ROOM_TYPE_LABELS: Record<string, string> = {
+  standard: 'Standard',
+  superior: 'Supérieure',
+  suite: 'Suite',
+  suite_deluxe: 'Suite Deluxe',
+  lodge: 'Lodge',
+  villa: 'Villa',
+};
 
 interface Reservation {
   id: string;
@@ -119,7 +123,7 @@ export default function PlanningGrid() {
     );
 
     days.forEach((day, dayIdx) => {
-      const res = getReservationForCell(room.id, day);
+      const res = getReservationForCell(room.roomNumber, day);
       const cellToday = isToday(day);
       const resColor = res ? (STATUS_COLORS_PLAN[res.status] || '#6366f1') : undefined;
 

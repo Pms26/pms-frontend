@@ -491,7 +491,7 @@ export function RoomModal() {
     showToast,
   } = useModalToast();
 
-  const [localStatus, setLocalStatus] = useState<RoomStatus | null>(selectedRoomStatus);
+  const [localStatus, setLocalStatus] = useState<HousekeepingStatus | null>(selectedRoomStatus);
   const [localReason, setLocalReason] = useState(selectedRoomReason);
 
   useEffect(() => {
@@ -526,10 +526,10 @@ export function RoomModal() {
             <select
               className="form-select pms-input mb-3"
               value={localStatus ?? ''}
-              onChange={(e) => setLocalStatus(e.target.value as RoomStatus)}
+              onChange={(e) => setLocalStatus(e.target.value as HousekeepingStatus)}
             >
               <option value="sale">Sale</option>
-              <option value="encours">Nettoyage en cours</option>
+              <option value="nettoyage_en_cours">Nettoyage en cours</option>
               <option value="propre">Propre</option>
               <option value="controlee">Contrôlée</option>
               <option value="bloquee">Bloquée</option>

@@ -34,26 +34,27 @@ export interface LoginResponse {
 
 // ─── Rooms ───────────────────────────────────────────────
 
-export type RoomStatus = 'sale' | 'encours' | 'propre' | 'controlee' | 'bloquee' | 'inhouse';
+export type HousekeepingStatus = 'sale' | 'nettoyage_en_cours' | 'propre' | 'controlee' | 'bloquee';
 
 export type RoomCategory = 'standard' | 'superior' | 'suite' | 'suite_deluxe' | 'lodge' | 'villa';
 
 export interface Room {
   id: string;
-  type: string;
+  roomNumber: string;
   category: RoomCategory;
   floor: number;
-  status: RoomStatus;
-  reason?: string; // motif de blocage
+  bedType: string;
+  maxOccupancy: number;
+  housekeepingStatus: HousekeepingStatus;
+  blockReason: string | null;
 }
 
-export const ROOM_STATUS_CONFIG: Record<RoomStatus, { label: string; color: string; icon: string }> = {
-  sale:      { label: 'Sale',       color: '#ef4444', icon: 'exclamation-circle' },
-  encours:   { label: 'En cours',   color: '#f59e0b', icon: 'arrow-repeat' },
-  propre:    { label: 'Propre',     color: '#10b981', icon: 'check-circle' },
-  controlee: { label: 'Contrôlée', color: '#6366f1', icon: 'shield-check' },
-  bloquee:   { label: 'Bloquée',   color: '#6b7280', icon: 'x-octagon' },
-  inhouse:   { label: 'In-House',   color: '#06b6d4', icon: 'person' },
+export const ROOM_STATUS_CONFIG: Record<HousekeepingStatus, { label: string; color: string; icon: string }> = {
+  sale:               { label: 'Sale',               color: '#ef4444', icon: 'exclamation-circle' },
+  nettoyage_en_cours: { label: 'Nettoyage en cours', color: '#f59e0b', icon: 'arrow-repeat' },
+  propre:             { label: 'Propre',             color: '#10b981', icon: 'check-circle' },
+  controlee:          { label: 'Contrôlée',          color: '#6366f1', icon: 'shield-check' },
+  bloquee:            { label: 'Bloquée',            color: '#6b7280', icon: 'x-octagon' },
 };
 
 // ─── Reservations ────────────────────────────────────────
@@ -351,21 +352,191 @@ export interface SegmentTrendResponse {
 
 // ─── Front Office ────────────────────────────────────────
 
-export interface FolioEntry {
-  prestation: string;
+export type BookingStatus =
+  | 'status_option'
+  | 'status_confirmed'
+  | 'status_voucher'
+  | 'status_checked_in'
+  | 'status_checked_out';
+
+export interface Booking {
+  id: string;
+  ref: string;
+  status: BookingStatus;
+  locked: boolean;
+  customer: { firstName: string; lastName: string; email: string } | null;
+  guest: { firstName: string; lastName: string } | null;
+  room: { roomNumber: string; category: string } | null;
+  checkInDate: string;
+  checkOutDate: string;
+  pax: number;
+  regime: string;
+  roomRate: number;
+  estimatedTotal: number;
+  deposit: object | number;
+  comments: string;
+  marketSegment: string | null;
+  billToPartnerId: string | null;
+  billToLabel: string | null;
+}
+
+export interface Proforma {
+  bookingId: string;
+  bookingRef: string;
+  status: string;
+  customer: { firstName: string; lastName: string; email: string } | null;
+  guest: { firstName: string; lastName: string } | null;
+  room: { roomNumber: string; category: string } | null;
+  stay: {
+    checkInDate: string;
+    checkOutDate: string;
+    nights: number;
+    pax: number;
+    regime: string;
+  };
+  pricing: {
+    roomRate: number;
+    estimatedRoomAmount: number;
+    deposit: number;
+    balanceDue: number;
+  };
+  notes: unknown;
+}
+
+export interface Folio {
+  id: string;
+  type: 'A' | 'B';
+  label: string;
+  status: 'open' | 'closed';
+  bookingId: string;
+  totalAmount: number;
+}
+
+export interface FolioItem {
+  id: string;
+  description: string;
+  category: string;
+  quantity: number;
+  unitPrice: string;
+  totalAmount: string;
+  taxRate: string;
+  isVisibleOnPrint: boolean;
   date: string;
-  qty: number;
-  amount: string;
 }
 
-export interface CheckOutSummary {
-  hebergement: string;
-  extras: string;
-  taxeSejour: string;
-  total: string;
+export interface FolioDetail {
+  folio: Folio;
+  allItems: FolioItem[];
+  printableItems: Omit<FolioItem, 'isVisibleOnPrint'>[];
+  printableTotal: number;
 }
 
-export type PaymentMode = 'cb' | 'esp' | 'chq' | 'vir' | 'deb';
+export interface StatementFolio {
+  id: string;
+  type: 'A' | 'B';
+  label: string;
+  status: 'open' | 'closed';
+  items: FolioItem[];
+  totalAmount: number;
+}
+
+export interface StatementPayment {
+  amount: number;
+  method: string;
+  date: string;
+}
+
+export interface Statement {
+  booking: {
+    ref: string;
+    customer: string;
+    room: string;
+    checkIn: string;
+    checkOut: string | null;
+    nights: number;
+  };
+  folios: StatementFolio[];
+  payments: StatementPayment[];
+  totalCharges: number;
+  totalPaid: number;
+}
+
+export type PaymentMethod = 'cb' | 'esp' | 'chq' | 'virement' | 'debiteur';
+
+export interface Payment {
+  id: string;
+  bookingId: string;
+  folioId: string;
+  amount: number;
+  paymentMethod: PaymentMethod;
+  reference: string | null;
+  processedAt: string;
+}
+
+export interface PaymentsResponse {
+  date: string;
+  count: number;
+  totalAmount: number;
+  payments: Payment[];
+}
+
+export interface InvoiceItem {
+  id: string;
+  description: string;
+  category: string;
+  quantity: number;
+  unitPrice: string;
+  totalAmount: string;
+  taxRate: string;
+}
+
+export interface Invoice {
+  folioId: string;
+  bookingId: string;
+  bookingRef: string | null;
+  billToPartnerId: string | null;
+  billToLabel: string | null;
+  folioType: 'A' | 'B';
+  label: string;
+  closedAt: string;
+  totalAmount: number;
+  items: InvoiceItem[];
+}
+
+export interface InvoicesResponse {
+  date: string;
+  count: number;
+  totalAmount: number;
+  invoices: Invoice[];
+}
+
+export interface CheckInResult {
+  message: string;
+  booking: { id: string; status: string; actualCheckIn: string; room: string };
+  folios: {
+    folioA: { id: string; type: 'A' };
+    folioB: { id: string; type: 'B' };
+  };
+}
+
+export interface CheckOutPayment {
+  paymentMethod: PaymentMethod;
+  amount: number;
+  folioType?: 'A' | 'B';
+  cardType?: string;
+  reference?: string;
+}
+
+export interface CheckOutResult {
+  message: string;
+  booking: { id: string; status: string; actualCheckOut: string; room: string };
+  summary: {
+    totalCharges: number;
+    deposit: number;
+    totalPaid: number;
+    remainingBalance: number;
+  };
+}
 
 // ─── Client ──────────────────────────────────────────────
 

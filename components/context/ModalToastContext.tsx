@@ -1,6 +1,6 @@
 'use client';
 import React, { createContext, useContext, useState } from 'react';
-import type { RoomStatus } from '@/types';
+import type { HousekeepingStatus } from '@/types';
 
 interface ModalToastContextValue {
   isReservationOpen: boolean;
@@ -8,12 +8,12 @@ interface ModalToastContextValue {
   openReservation: (id?: string) => void;
   closeReservation: () => void;
   isRoomOpen: boolean;
-  openRoom: (roomId: string, status: RoomStatus, reason?: string) => void;
+  openRoom: (roomId: string, status: HousekeepingStatus, reason?: string) => void;
   closeRoom: () => void;
   selectedRoomId: string | null;
-  selectedRoomStatus: RoomStatus | null;
+  selectedRoomStatus: HousekeepingStatus | null;
   selectedRoomReason: string;
-  setSelectedRoomStatus: (status: RoomStatus) => void;
+  setSelectedRoomStatus: (status: HousekeepingStatus) => void;
   setSelectedRoomReason: (reason: string) => void;
   toastMessage: string | null;
   showToast: (msg: string) => void;
@@ -33,7 +33,7 @@ export function ModalToastProvider({ children }: { children: React.ReactNode }) 
   const [reservationEditId, setReservationEditId] = useState<string | null>(null);
   const [isRoomOpen, setRoomOpen] = useState(false);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
-  const [selectedRoomStatus, setSelectedRoomStatus] = useState<RoomStatus | null>(null);
+  const [selectedRoomStatus, setSelectedRoomStatus] = useState<HousekeepingStatus | null>(null);
   const [selectedRoomReason, setSelectedRoomReason] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isClosureConfirmOpen, setClosureConfirmOpen] = useState(false);
