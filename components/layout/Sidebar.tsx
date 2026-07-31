@@ -93,11 +93,18 @@ function SidebarNavContent({ collapsed }: { collapsed: boolean }) {
     return true;
   });
 
-  const filteredGestionItems = isComptable
-    ? gestionItems.filter((item) =>
-        item.href.startsWith('/night-audit') || item.href.startsWith('/tarification') || item.href.startsWith('/analytics')
-      )
-    : gestionItems;
+  const filteredGestionItems = gestionItems.filter((item) => {
+    if (item.href === '/analytics') {
+      return role === 'admin' || role === 'manager' || role === 'comptable';
+    }
+    if (item.href.startsWith('/night-audit') && role === 'housekeeping_supervisor') {
+      return false;
+    }
+    if (isComptable) {
+      return item.href.startsWith('/night-audit') || item.href.startsWith('/tarification');
+    }
+    return true;
+  });
 
   return (
     <>
