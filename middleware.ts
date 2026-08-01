@@ -23,7 +23,7 @@ const ROLE_RESTRICTIONS: Record<string, string[]> = {
   '/front-office/check-in': ['admin', 'manager', 'receptionist', 'housekeeping_supervisor'],
   '/front-office/check-out': ['admin', 'manager', 'receptionist'],
   '/front-office/payments': ['admin', 'manager', 'receptionist', 'housekeeping_supervisor', 'comptable'],
-  '/tarification': ['admin', 'manager', 'receptionist', 'comptable'],
+  '/tarification': ['admin', 'manager', 'comptable'],
   '/analytics': ['admin', 'manager', 'comptable'],
   '/users': ['admin'],
   '/register': ['admin'],

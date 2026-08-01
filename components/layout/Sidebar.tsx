@@ -104,6 +104,9 @@ function SidebarNavContent({ collapsed }: { collapsed: boolean }) {
     if (item.href.startsWith('/night-audit') && role === 'housekeeping_supervisor') {
       return false;
     }
+    if (item.href.startsWith('/tarification') && (role === 'receptionist' || role === 'housekeeping_supervisor')) {
+      return false;
+    }
     if (isComptable) {
       return item.href.startsWith('/night-audit') || item.href.startsWith('/tarification');
     }

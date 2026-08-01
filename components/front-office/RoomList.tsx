@@ -18,7 +18,7 @@ const HOUSEKEEPING_STATUSES: HousekeepingStatus[] = [
 
 const CATEGORY_LABELS: Record<string, string> = {
   standard: 'Standard',
-  superior: 'Supérieure',
+  superieure: 'Supérieure',
   suite: 'Suite',
   suite_deluxe: 'Suite Deluxe',
   lodge: 'Lodge',

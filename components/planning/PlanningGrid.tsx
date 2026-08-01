@@ -13,7 +13,7 @@ const STATUS_COLORS_PLAN: Record<string, string> = {
 
 const ROOM_TYPE_LABELS: Record<string, string> = {
   standard: 'Standard',
-  superior: 'Supérieure',
+  superieure: 'Supérieure',
   suite: 'Suite',
   suite_deluxe: 'Suite Deluxe',
   lodge: 'Lodge',
