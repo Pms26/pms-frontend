@@ -36,7 +36,7 @@ export interface LoginResponse {
 
 export type HousekeepingStatus = 'sale' | 'nettoyage_en_cours' | 'propre' | 'controlee' | 'bloquee';
 
-export type RoomCategory = 'standard' | 'superior' | 'suite' | 'suite_deluxe' | 'lodge' | 'villa';
+export type RoomCategory = 'standard' | 'superieure' | 'suite' | 'suite_deluxe' | 'lodge' | 'villa';
 
 export interface Room {
   id: string;
@@ -119,32 +119,132 @@ export const SEGMENT_COLORS: Record<MarketSegment, string> = {
   b2b: '#f59e0b',
 };
 
-// ─── Tarification ────────────────────────────────────────
+// ─── Tarification (aligné sur le contrat service-tarification.md §5) ──
 
-export interface TarifCategory {
-  cat: string;
-  basse: number;
-  moyenne: number;
-  haute: number;
-  pics: number;
+export type SeasonName = 'basse' | 'moyenne' | 'haute' | 'pics';
+
+export interface Season {
+  id: number;
+  nom: SeasonName;
+  dateDebut: string;
+  dateFin: string;
 }
 
+export interface RatePlan {
+  id: number;
+  categorie: RoomCategory;
+  prixTTC: string;
+  seasonId: number;
+  season?: Season;
+}
+
+export type Regime = 'BB' | 'DP' | 'PC';
+
+export interface RegimeSupplement {
+  id: number;
+  regime: Regime;
+  supplementDH: string;
+  seasonId: number;
+  season?: Season;
+}
+
+export type HotelCategory =
+  | '1_etoile'
+  | '2_etoiles'
+  | '3_etoiles'
+  | '4_etoiles'
+  | '5_etoiles'
+  | 'riad'
+  | 'maison_hotes';
+
+export interface LocalTax {
+  id: number;
+  categorieHotel: HotelCategory;
+  montantTS: string;
+  montantTPT: string;
+}
+
+export type PartnerType = 'agence_voyage' | 'tour_operateur' | 'societe';
+
+export interface Partner {
+  id: number;
+  nom: string;
+  type: PartnerType;
+  email: string | null;
+  telephone: string | null;
+  actif: boolean;
+}
+
+export interface PartnerRate {
+  id: number;
+  categorie: RoomCategory;
+  prixNetDH: string;
+  partnerId: number;
+  seasonId: number;
+  partner?: Partner;
+  season?: Season;
+}
+
+export type ExtraCategoryName =
+  | 'restaurant'
+  | 'bar_boissons'
+  | 'spa'
+  | 'activites'
+  | 'transferts'
+  | 'services';
+
 export interface ExtraItem {
-  name: string;
-  price: string;
+  id: number;
+  nom: string;
+  prixDH: string;
+  tauxTVA: '10' | '20';
+  actif: boolean;
+  categoryId: number;
 }
 
 export interface ExtraCategory {
-  cat: string;
-  color: string;
-  icon: string;
+  id: number;
+  nom: ExtraCategoryName;
   items: ExtraItem[];
 }
 
-export interface FiscaliteItem {
-  label: string;
-  description: string;
-  amount: string;
+export type DiscountType = 'pourcentage' | 'valeur_fixe';
+
+export interface Discount {
+  id: number;
+  nom: string;
+  type: DiscountType;
+  valeur: string;
+  actif: boolean;
+}
+
+export interface DiscountApplyResult {
+  prixInitial: number;
+  discount: string;
+  type: DiscountType;
+  prixFinal: string;
+}
+
+export type BreakdownPoste =
+  | 'hebergement'
+  | 'restaurant'
+  | 'spa'
+  | 'activites'
+  | 'autre';
+
+export interface PackageBreakdown {
+  id: number;
+  poste: BreakdownPoste;
+  montantDH: string;
+  packageId: number;
+}
+
+export interface PackageOffer {
+  id: number;
+  nom: string;
+  prixGlobalDH: string;
+  actif: boolean;
+  breakdowns: PackageBreakdown[];
 }
 
 // ─── Night Audit ─────────────────────────────────────────

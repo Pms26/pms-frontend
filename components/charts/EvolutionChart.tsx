@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import Chart from 'chart.js/auto';
-import { getTarifs } from '@/lib/api/tarification';
+import { getRatePlans, getSeasons } from '@/lib/api/tarification';
 
 interface EvolutionChartProps {
   labels?: string[];
@@ -31,9 +31,16 @@ export default function EvolutionChart({ labels: propLabels, occupancyData, adrD
         toData = occupancyData;
         adrValues = adrData;
       } else {
-        const tarifs = await getTarifs();
+        const [ratePlans, seasons] = await Promise.all([getRatePlans(), getSeasons()]);
+        const basseSeason = seasons.find((s) => s.nom === 'basse');
+        const bassePrices = basseSeason
+          ? ratePlans.filter((rp) => rp.seasonId === basseSeason.id)
+          : [];
+        const avgBasse = Math.round(
+          bassePrices.reduce((sum, rp) => sum + (parseFloat(rp.prixTTC) || 0), 0) /
+            (bassePrices.length || 1),
+        );
         labels = ['Août','Sep','Oct','Nov','Déc','Jan','Fév','Mar','Avr','Mai','Juin','Juil'];
-        const avgBasse = Math.round((tarifs.reduce((s, t) => s + t.basse, 0) / (tarifs.length || 1)));
         const baseTO = Math.max(50, Math.min(90, Math.round(avgBasse / 10)));
         const baseADR = Math.round(avgBasse * 1.2);
         toData = labels.map((_, i) => Math.max(40, Math.min(100, baseTO + Math.round(Math.sin(i / 2) * 8 + (i % 3 === 0 ? 5 : 0)))));
