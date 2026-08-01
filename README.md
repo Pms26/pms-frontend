@@ -1,69 +1,77 @@
 # OASIS PMS — Frontend
 
-Application frontend React + TypeScript pour OASIS PMS, système de gestion hôtelière pour AMH Hospitality — planning, réservations, front office, housekeeping, tarification, night audit et analytics.
+Application frontend Next.js 14 (App Router) pour OASIS PMS, système de gestion hôtelière pour AMH Hospitality. Elle communique exclusivement avec le backend via le **api-gateway** (port 4000) — aucun appel direct aux microservices.
 
 ## Stack technique
 
-- **React** + **TypeScript**
-- **Tailwind CSS** + design system custom (`globals.css`)
-- **Axios** pour les appels HTTP
-- **@tanstack/react-query** pour la gestion du cache et des états loading/error
-- **Zustand** pour l'état global (utilisateur, rôle, token)
-- **Chart.js** pour les graphiques (dashboard, analytics)
+Dépendances réelles (`package.json`) :
 
-## Structure du projet
-frontend/
-├── app/
-│   ├── login/
-│   ├── dashboard/
-│   ├── front-office/
-│   │   ├── check-in/
-│   │   └── check-out/
-│   ├── housekeeping/
-│   ├── night-audit/
-│   │   └── history/
-│   ├── tarification/
-│   ├── reservations/          # inclut aussi la vue Planning (?view=list)
-│   ├── analytics/
-│   ├── layout.tsx
-│   └── globals.css
-├── components/
-│   ├── ui/                     # composants réutilisables
-│   ├── layout/                 # sidebar, header, modales globales
-│   ├── charts/                 # composants Chart.js
-│   ├── context/                # ModalToastContext (modales + toasts globaux)
-│   ├── front-office/
-│   ├── planning/
-│   └── reservations/
-├── lib/
-│   ├── api/                    # un fichier par domaine métier (mocké pour l'instant)
-│   └── auth/                   # AuthContext
-├── middleware.ts               # protection des routes par authentification/rôle
-├── types/
-└── package.json
+- **Next.js** `14.2.35` (App Router) + **React** `^18` / **react-dom** `^18`
+- **@tanstack/react-query** `^5.101.2` — cache et états loading/error
+- **Axios** `^1.18.1` — client HTTP (`lib/api/client.ts`)
+- **Chart.js** `^4.4.3` + **react-chartjs-2** `^5.3.1` — graphiques
+- **Zustand** `^5.0.14` — état global (auth)
+- **Tailwind CSS** `^3.4.19` + design system custom (`globals.css`)
+- **TypeScript** `5.5`
 
-## Authentification
+## Modules livrés
 
-Les routes sont protégées via `middleware.ts` : toute page nécessite un token valide, sinon redirection vers `/login`. Le contrôle d'accès par rôle est géré dans `lib/auth/AuthContext.tsx`.
+Chaque module correspond à un dossier réel dans `app/` :
 
-## Données
+| Module                          | Route principale                                                              |
+| ------------------------------- | ----------------------------------------------------------------------------- |
+| Auth                            | `/login`, `/register`, `/forgot-password`, `/reset-password`                  |
+| Dashboard                       | `/dashboard`                                                                  |
+| Réservations (Planning + liste) | `/reservations` (planning), `/reservations?view=list` (liste)                 |
+| Front Office                    | `/front-office/check-in`, `/front-office/check-out`, `/front-office/payments` |
+| Housekeeping                    | `/housekeeping`                                                               |
+| Night Audit                     | `/night-audit`, `/night-audit/history`                                        |
+| Analytics                       | `/analytics`                                                                  |
+| Tarification                    | `/tarification`                                                               |
+| Users                           | `/users`                                                                      |
 
-Les appels API sont actuellement mockés dans `lib/api/*.ts`, en attendant la mise à disposition du backend. La structure des données mockées respecte le contrat attendu des futures réponses API, pour permettre un branchement transparent.
+## Rôles gérés
 
-## Lancer le projet
+5 rôles (`types/index.ts`, `UserRole`), contrôlés par `middleware.ts` (`ROLE_RESTRICTIONS`). Les routes non listées ci-dessous renvoient l'utilisateur vers sa page d'accueil (`ROLE_HOME_PAGES`).
+
+- **admin** — accès complet : toutes les routes, y compris `/users`, `/register` (admin uniquement).
+- **manager** — `/dashboard`, `/night-audit` (+`/history`), `/front-office` (check-in, check-out, payments), `/tarification`, `/analytics`, `/planning`, `/reservations`, `/housekeeping`. Restreint : `/users`, `/register`.
+- **comptable** — `/dashboard`, `/night-audit` (+`/history`), `/front-office` (page + `/payments`, consultation de folio en lecture seule), `/tarification`, `/analytics`. Restreint : check-in, check-out, `/planning`, `/reservations`, `/housekeeping`, `/users`, `/register`.
+- **receptionist** — `/front-office` (check-in, check-out, payments), `/planning`, `/reservations`, `/housekeeping`. Restreint : `/dashboard`, `/night-audit`, `/tarification`, `/analytics`, `/users`, `/register`.
+- **housekeeping_supervisor** — `/front-office` (page + check-in + payments), `/housekeeping`. Restreint : check-out, `/planning`, `/reservations`, `/dashboard`, `/night-audit`, `/tarification`, `/analytics`, `/users`, `/register`.
+
+Page d'accueil par rôle : `admin`/`manager`/`comptable` → `/dashboard`, `receptionist` → `/front-office`, `housekeeping_supervisor` → `/housekeeping`.
+
+Les routes `/login`, `/forgot-password`, `/reset-password` sont publiques.
+
+## Setup
 
 ```bash
-cd frontend
 npm install
-npm run dev
 ```
 
-Puis ouvrez http://localhost:3000
+Variables d'environnement requises (voir `.env.example`) :
 
-Identifiants de test : `admin` / `1234`
+```bash
+# URL du api-gateway (ne jamais pointer vers les services individuels)
+NEXT_PUBLIC_API_URL=http://localhost:4000
 
-## Notes de développement
+# Active les mocks au lieu des vrais appels API (true | false)
+NEXT_PUBLIC_USE_MOCKS=false
+```
 
-- Les modales globales (réservation, chambre, toast) sont gérées via `ModalToastContext` et rendues dans `AppShell`.
-- La grille Planning est un composant React (`components/planning/PlanningGrid.tsx`), pas de manipulation DOM directe.
-- Chaque graphique (`components/charts/`) initialise Chart.js via `useEffect`/`useRef` et nettoie l'instance au démontage.
+Commandes :
+
+```bash
+npm run dev        # serveur de développement (http://localhost:3000)
+npm run lint       # lint
+npx tsc --noEmit   # typecheck
+```
+
+## Architecture
+
+- **Gateway-only** : tous les appels passent par `apiClient` (Axios), dont le `baseURL` est `NEXT_PUBLIC_API_URL` (défaut `http://localhost:4000`). Aucune URL de microservice direct (4001-4009) dans `lib/`.
+- **Couche API par module** : `lib/api/<module>.ts` (auth, analytics, frontOffice, housekeeping, nightAudit, reservations, tarification) ; le client partagé et le flag `USE_MOCKS` vivent dans `lib/api/client.ts`.
+- **Mapping backend→frontend dans la couche API uniquement** : les types métier (`types/index.ts`) et les mappings (`mapBackendUser`, `mapBackendStatus`, etc.) sont confinés à `lib/api/*.ts` ; les pages ne manipulent que des types frontend.
+- **Pas de `loading.tsx` / `error.tsx`** : aucun dans `app/`. Les états sont gérés en ligne via TanStack Query (`useQuery`/`useMutation`) directement dans les pages.
+- **Auth** : token JWT dans cookie `token` + localStorage (`pms-token`), interceptor de refresh 401 → `/api/auth/refresh`, contexte dans `lib/auth/AuthContext.tsx`.
